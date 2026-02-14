@@ -4,7 +4,7 @@ import pytest
 
 class Tests:
     def __init__(self):
-        self.ratings = Ratings('data/ratings.csv')
+        self.ratings = Ratings('../data/ratings.csv')
         
     def ratings_tests(self):
         assert len(self.ratings.ratings_csv) == 1000 # Checking the ratings_csv containing 1000 rows
