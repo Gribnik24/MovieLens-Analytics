@@ -55,7 +55,7 @@ class Ratings:
         def dist_by_year(self):
             """
             The method returns a dict where the keys are years and the values are counts. 
-            Sort it by years ascendingly. You need to extract years from timestamps.
+            Sorted by years ascendingly. The years are extracted timestamps.
             """
             timestamps = [row[3] for row in self.parent.ratings_csv]
             years = [datetime.fromtimestamp(ts).year for ts in timestamps]
@@ -65,7 +65,7 @@ class Ratings:
         def dist_by_rating(self):
             """
             The method returns a dict where the keys are ratings and the values are counts.
-            Sort it by ratings ascendingly.
+            Sorted by ratings ascendingly.
             """
             ratings = [row[2] for row in self.parent.ratings_csv]
             ratings_distribution = dict(sorted(Counter(ratings).items()))
@@ -75,7 +75,7 @@ class Ratings:
             """
             The method returns top-n movies by the number of ratings. 
             It is a dict where the keys are movie titles and the values are numbers.
-            Sort it by numbers descendingly.
+            Sorted by numbers descendingly.
             """
             movie_counts = Counter([row[1] for row in self.parent.ratings_csv])
             top_movies = {}
@@ -87,8 +87,7 @@ class Ratings:
             """
             The method returns top-n movies by the average or median of the ratings.
             It is a dict where the keys are movie titles and the values are metric values.
-            Sort it by metric descendingly.
-            The values should be rounded to 2 decimals.
+            Sorted by metric descendingly.
             """
             each_id_ratings = {}
             for row in self.parent.ratings_csv:
@@ -122,7 +121,6 @@ class Ratings:
             The method returns top-n movies by the variance of the ratings.
             It is a dict where the keys are movie titles and the values are the variances.
             Sorted by variance descendingly.
-            The values should be rounded to 2 decimals.
             """
             def find_variance(ratings_list):
                 mean = sum(ratings_list) / (len_ratings_list := len(ratings_list))
@@ -146,17 +144,10 @@ class Ratings:
             return top_movies
 
     class Users(Movies):
-        """
-        In this class, three methods should work. 
-        The 1st returns the distribution of users by the number of ratings made by them.
-        The 2nd returns the distribution of users by average or median ratings made by them.
-        The 3rd returns top-n users with the biggest variance of their ratings.
-        Inherit from the class Movies. Several methods are similar to the methods from it.
-        """
         def dist_by_rating(self):
             """
             The method returns a dict where the keys are users' id and the values are counts.
-            Sort it by ratings ascendingly.
+            Sorted by ratings ascendingly.
             """
             ratings = [row[0] for row in self.parent.ratings_csv]
             ratings_distribution = dict(sorted(Counter(ratings).items()))
@@ -166,8 +157,7 @@ class Ratings:
             """
             The method returns top-n users by the average or median of the ratings.
             It is a dict where the keys are users' id and the values are metric values.
-            Sort it by metric descendingly.
-            The values should be rounded to 2 decimals.
+            Sorted by metric descendingly.
             """
             each_id_ratings = {}
             for row in self.parent.ratings_csv:
@@ -200,8 +190,7 @@ class Ratings:
             """
             The method returns top-n users by the variance of the ratings.
             It is a dict where the keys are users' id and the values are the variances.
-            Sort it by variance descendingly.
-            The values should be rounded to 2 decimals.
+            Sorted by variance descendingly.
             """
             def find_variance(ratings_list):
                 mean = sum(ratings_list) / (len_ratings_list := len(ratings_list))
