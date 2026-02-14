@@ -19,8 +19,8 @@ class Ratings:
         """
         with open(path) as file:
             next(file)
-            for i in range(1000):
-                current_row = file.readline().strip().split(',')
+            for line in file:
+                current_row = line.strip().split(',')
                 current_row[2] = float(current_row[2]) # rating
                 current_row[3] = int(current_row[3]) # timestamp
                 self.ratings_csv.append(current_row)
