@@ -248,10 +248,17 @@ class Links:
         Sorted by movieId descendingly.
         """
         def money_converter(money_value):
+            """
+            Function for parsed money values converting into numeric.
+            Deleting '$' sign, commas and additional messages. For example:
+            '$93,000,000 (extimated)' --> 93000000
+            
+            """
             converted_money = money_value
             if len(money_value) == 1:
                 try:
-                    converted_money = converted_money.split()[0] # deleting probal (estimated) part. Example: $93,000,000 (estimated)
+                    # deleting probal (estimated) part in budget value. Example: $93,000,000 (estimated)
+                    converted_money = converted_money.split()[0]
                 except:
                     pass
                 converted_money = int(''.join(converted_money.lstrip('$').split(',')))
