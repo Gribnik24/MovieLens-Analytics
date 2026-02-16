@@ -221,6 +221,11 @@ class Links:
     Analyzing data from links.csv
     """
     def __init__(self, path_to_the_file):
+        """
+        Put here any fields that you think you will need.
+        """
+        self.current_imdb_info = []
+        self.current_headers_info = []
         self.links_csv = []
         self.import_data_links(self, path_to_the_file)
     
@@ -231,11 +236,10 @@ class Links:
         """
         with open(path) as file:
             next(file)
-            for i in range(1000):
-                current_row = file.readline().strip().split(',')
-                self.ratings_csv.append(current_row)
+            for line in file:
+                self.links_csv.append(line.strip().split(','))
     
-    def get_imdb(list_of_movies, list_of_fields):
+    def get_imdb(self, list_of_movies, list_of_fields):
         """
         The method returns a list of lists [movieId, field1, field2, field3, ...]
         for the list of movies given as the argument (movieId).
@@ -243,7 +247,20 @@ class Links:
         The values  are parsed from the IMDB webpages of the movies.
         Sorted by movieId descendingly.
         """
-        imdb_info = []
+        def money_converter(money_value):
+            converted_money = money_value
+            if len(money_value) == 1:
+                try:
+                    converted_money = converted_money.split()[0] # deleting probal (estimated) part. Example: $93,000,000 (estimated)
+                except:
+                    pass
+                converted_money = int(''.join(converted_money.lstrip('$').split(',')))
+            else:
+                converted_money = list(map(lambda x: money_converter(x), converted_money))
+            return converted_money
+
+        self.current_imdb_info = []
+        self.current_headers_info = [field.strip().lower() for field in list_of_fields]
         headers = {'User-Agent': 'Mozilla/5.0(Windows NT 10.0; Win64; x64)', 'Accept': 'text/html'}
         for movie_id in list_of_movies:
             link = f'http://www.imdb.com/title/tt{movie_id}/'
@@ -346,93 +363,92 @@ class Links:
             except:
                 Exception
 
-            converted_list_of_fields = [field.strip().lower() for field in list_of_fields]
-            current_move_info = [movie_id]
-            for field in converted_list_of_fields:
+            current_movie_info = [movie_id]
+            for field in self.current_headers_info:
                 if field in ('original_title', 'title', 'eng_title'):
-                    current_move_info.append(original_title)
+                    current_movie_info.append(original_title)
                 elif field == 'year':
-                    current_move_info.append(year)
+                    current_movie_info.append(year)
                 elif field == 'age_rating':
-                    current_move_info.append(age_rating)
+                    current_movie_info.append(age_rating)
                 elif field == 'duration':
-                    current_move_info.append(duration)
+                    current_movie_info.append(duration)
                 elif field == 'tags':
                     if len(tags) == 1:
-                        current_move_info.append(tags[0])
+                        current_movie_info.append(tags[0])
                     else:
-                        current_move_info.append(tags)
+                        current_movie_info.append(tags)
                 elif field in ('directors', 'director'):
                     if len(directors) == 1:
-                        current_move_info.append(directors[0])
+                        current_movie_info.append(directors[0])
                     else:
-                        current_move_info.append(directors)
+                        current_movie_info.append(directors)
                 elif field in ('writers', 'writer'):
                     if len(writers) == 1:
-                        current_move_info.append(writers[0])
+                        current_movie_info.append(writers[0])
                     else:
-                        current_move_info.append(writers)
+                        current_movie_info.append(writers)
                 elif field == 'main_actors':
                     if len(main_actors) == 1:
-                        current_move_info.append(main_actors[0])
+                        current_movie_info.append(main_actors[0])
                     else:
-                        current_move_info.append(main_actors)
+                        current_movie_info.append(main_actors)
                 elif field in ('release_date', 'release_dates'):
                     if len(release_dates) == 1:
-                        current_move_info.append(release_dates[0])
+                        current_movie_info.append(release_dates[0])
                     else:
-                        current_move_info.append(release_dates)
+                        current_movie_info.append(release_dates)
                 elif field in ('origins', 'origin countries'):
                     if len(origins) == 1:
-                        current_move_info.append(origins[0])
+                        current_movie_info.append(origins[0])
                     else:
-                        current_move_info.append(origins)
+                        current_movie_info.append(origins)
                 elif field in ('languages', 'language'):
                     if len(languages) == 1:
-                        current_move_info.append(languages[0])
+                        current_movie_info.append(languages[0])
                     else:
-                        current_move_info.append(languages)
+                        current_movie_info.append(languages)
                 elif field == 'filming_locations':
                     if len(filming_locations) == 1:
-                        current_move_info.append(filming_locations[0])
+                        current_movie_info.append(filming_locations[0])
                     else:
-                        current_move_info.append(filming_locations)
+                        current_movie_info.append(filming_locations)
                 elif field == ('prod_companies', 'production_companies', 'companies'):
                     if len(prod_companies) == 1:
-                        current_move_info.append(prod_companies[0])
+                        current_movie_info.append(prod_companies[0])
                     else:
-                        current_move_info.append(prod_companies)
+                        current_movie_info.append(prod_companies)
                 elif field in ('budgets', 'budget'):
-                    if len(budgets) == 1:
-                        current_move_info.append(budgets[0])
-                    else:
-                        current_move_info.append(budgets)
+                        current_movie_info.append(money_converter(budgets))
                 elif field == 'gross_domestics':
-                    if len(gross_domestics) == 1:
-                        current_move_info.append(gross_domestics[0])
-                    else:
-                        current_move_info.append(gross_domestics)
+                    current_movie_info.append(money_converter(gross_domestics))
                 elif field == 'opening_weekend_domestics':
-                    if len(opening_weekend_domestics) == 1:
-                        current_move_info.append(opening_weekend_domestics[0])
-                    else:
-                        current_move_info.append(opening_weekend_domestics)
+                    current_movie_info.append(money_converter(opening_weekend_domestics[0]))
                 elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses'):
-                    if len(cumulative_worldwide_grosses) == 1:
-                        current_move_info.append(cumulative_worldwide_grosses[0])
-                    else:
-                        current_move_info.append(cumulative_worldwide_grosses)
+                    current_movie_info.append(money_converter(cumulative_worldwide_grosses))
 
-            imdb_info.append(current_move_info)
-            imdb_info.sort(reverse=True, key=lambda x: x[0])
+            self.current_imdb_info.append(current_movie_info)
+            self.current_imdb_info.sort(reverse=True, key=lambda x: x[0])
 
-        return imdb_info
+        return self.current_imdb_info
         
     def top_directors(self, n):
         """
         The method returns a dict with top-n directors where the keys are directors and 
         the values are numbers of movies created by them. Sorted by numbers descendingly.
         """
+        director_field_index = None
+        for index, field in enumerate(self.current_headers_info):
+            if field in ('directors', 'director'):
+                director_field_index = index
+        if director_field_index is None:
+            raise ValueError('There is no director filed in movies data!')
+        
+        all_directors = []
+        for film in self.current_imdb_info:
+            all_directors.extend(film[director_field_index])
+        directors = Counter(all_directors).most_common(n)
+
         return directors
         
     def most_expensive(self, n):
@@ -440,6 +456,19 @@ class Links:
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are their budgets. Sorted by budgets descendingly.
         """
+        title_field_index, budget_filed_index = None, None
+        for index, field in enumerate(self.current_headers_info):
+            if field in ('original_title', 'title', 'eng_title'):
+                title_field_index = index
+            elif field in ('budgets', 'budget'):
+                budget_filed_index = index
+        if title_field_index is None:
+            raise ValueError('There is no title filed in movies data!')
+        if budget_filed_index is None:
+            raise ValueError('There is no budget filed in movies data!')
+
+        sorted_current_imdb_info = sorted(self.current_imdb_info, key=lambda x: x[budget_filed_index], reverse=True)
+        budgets = {film[title_field_index]: film[budget_filed_index] for film in sorted_current_imdb_info[:n]}
         return budgets
         
     def most_profitable(self, n):
