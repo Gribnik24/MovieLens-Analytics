@@ -227,7 +227,7 @@ class Links:
         self.current_imdb_info = []
         self.current_headers_info = []
         self.links_csv = []
-        self.import_data_links(self, path_to_the_file)
+        self.import_data_links(path_to_the_file)
     
     def import_data_links(self, path):
         """
@@ -252,25 +252,54 @@ class Links:
             Function for parsed money values converting into numeric.
             Deleting '$' sign, commas and additional messages. For example:
             '$93,000,000 (extimated)' --> 93000000
-            
             """
-            converted_money = money_value
-            if len(money_value) == 1:
-                try:
-                    # deleting probal (estimated) part in budget value. Example: $93,000,000 (estimated)
-                    converted_money = converted_money.split()[0]
-                except:
-                    pass
-                converted_money = int(''.join(converted_money.lstrip('$').split(',')))
-            else:
-                converted_money = list(map(lambda x: money_converter(x), converted_money))
-            return converted_money
+            # Handle None or empty values
+            if not money_value:
+                return 0
+            
+            # If it's a list with one element, extract that element
+            if isinstance(money_value, list):
+                if len(money_value) == 1:
+                    money_value = money_value[0]  # Extract the string from the list
+                else:
+                    # If it's a list with multiple elements, process each one
+                    return [money_converter(item) for item in money_value]
+            
+            # Now money_value should be a string
+            if not isinstance(money_value, str):
+                return 0
+            
+            try:
+                # deleting probal (estimated) part in budget value. Example: $93,000,000 (estimated)
+                if '(' in money_value:
+                    money_value = money_value.split('(')[0].strip()
+                
+                # Remove $ sign and commas, then convert to int
+                clean_value = money_value.replace('$', '').replace(',', '').strip()
+                return int(clean_value) if clean_value else 0
+            except (ValueError, AttributeError):
+                return 0
+        
+        def duration_converter(duration_value):
+            """
+            Function for parsed duration values. Converting into minutes count, numeric.
+            Deleting 'h' and 'm' signs. For example:
+            '2h 58m' --> 178
+            """
+            converted_duration = duration_value
+            try:
+                hours, minutes = converted_duration.split()
+                hours = int(hours.rstrip('h'))
+                minutes = int(minutes.rstrip('m'))
+                return minutes + hours * 60
+            except:
+                return None
 
         self.current_imdb_info = []
         self.current_headers_info = [field.strip().lower() for field in list_of_fields]
         headers = {'User-Agent': 'Mozilla/5.0(Windows NT 10.0; Win64; x64)', 'Accept': 'text/html'}
         for movie_id in list_of_movies:
-            link = f'http://www.imdb.com/title/tt{movie_id}/'
+            link = f'http://www.imdb.com/title/tt{str(movie_id)}/'
             try:
                 response = requests.get(link, headers=headers)
                 soup = BeautifulSoup(response.text, 'html.parser')
@@ -376,10 +405,10 @@ class Links:
                     current_movie_info.append(original_title)
                 elif field == 'year':
                     current_movie_info.append(year)
-                elif field == 'age_rating':
+                elif field in ('age_rating', 'age rating'):
                     current_movie_info.append(age_rating)
-                elif field == 'duration':
-                    current_movie_info.append(duration)
+                elif field in ('duration', 'runtime'):
+                    current_movie_info.append(duration_converter(duration))
                 elif field == 'tags':
                     if len(tags) == 1:
                         current_movie_info.append(tags[0])
@@ -395,12 +424,12 @@ class Links:
                         current_movie_info.append(writers[0])
                     else:
                         current_movie_info.append(writers)
-                elif field == 'main_actors':
+                elif field in ('main actors', 'main_actors'):
                     if len(main_actors) == 1:
                         current_movie_info.append(main_actors[0])
                     else:
                         current_movie_info.append(main_actors)
-                elif field in ('release_date', 'release_dates'):
+                elif field in ('release_date', 'release_dates', 'release date', 'release dates'):
                     if len(release_dates) == 1:
                         current_movie_info.append(release_dates[0])
                     else:
@@ -415,12 +444,12 @@ class Links:
                         current_movie_info.append(languages[0])
                     else:
                         current_movie_info.append(languages)
-                elif field == 'filming_locations':
+                elif field in ('filming_locations', 'filming locations'):
                     if len(filming_locations) == 1:
                         current_movie_info.append(filming_locations[0])
                     else:
                         current_movie_info.append(filming_locations)
-                elif field == ('prod_companies', 'production_companies', 'companies'):
+                elif field == ('prod_companies', 'production_companies', 'production companies', 'companies'):
                     if len(prod_companies) == 1:
                         current_movie_info.append(prod_companies[0])
                     else:
@@ -429,10 +458,12 @@ class Links:
                         current_movie_info.append(money_converter(budgets))
                 elif field == 'gross_domestics':
                     current_movie_info.append(money_converter(gross_domestics))
-                elif field == 'opening_weekend_domestics':
+                elif field in ('opening_weekend_domestics', 'opening weekend domestics'):
                     current_movie_info.append(money_converter(opening_weekend_domestics[0]))
-                elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses'):
+                elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
                     current_movie_info.append(money_converter(cumulative_worldwide_grosses))
+                else:
+                    current_movie_info.append(None)
 
             self.current_imdb_info.append(current_movie_info)
             self.current_imdb_info.sort(reverse=True, key=lambda x: x[0])
@@ -444,17 +475,24 @@ class Links:
         The method returns a dict with top-n directors where the keys are directors and 
         the values are numbers of movies created by them. Sorted by numbers descendingly.
         """
+        if not self.current_headers_info:
+            raise ValueError('The movie headers info is empty. Run get_imdb method first')
+        
         director_field_index = None
         for index, field in enumerate(self.current_headers_info):
             if field in ('directors', 'director'):
                 director_field_index = index
         if director_field_index is None:
-            raise ValueError('There is no director filed in movies data!')
+            raise ValueError('There is no director field in movies data!')
         
         all_directors = []
         for film in self.current_imdb_info:
-            all_directors.extend(film[director_field_index])
-        directors = Counter(all_directors).most_common(n)
+            directors_data = film[director_field_index]
+            if isinstance(directors_data, list):
+                all_directors.extend(directors_data)
+            elif directors_data:
+                all_directors.append(directors_data) 
+        directors = dict(Counter(all_directors).most_common(n))
 
         return directors
         
@@ -463,19 +501,26 @@ class Links:
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are their budgets. Sorted by budgets descendingly.
         """
-        title_field_index, budget_filed_index = None, None
+        if not self.current_headers_info:
+            raise ValueError('The movie headers info is empty. Run get_imdb method first')
+        
+        title_field_index, budget_field_index = None, None
         for index, field in enumerate(self.current_headers_info):
             if field in ('original_title', 'title', 'eng_title'):
                 title_field_index = index
             elif field in ('budgets', 'budget'):
-                budget_filed_index = index
+                budget_field_index = index
         if title_field_index is None:
-            raise ValueError('There is no title filed in movies data!')
-        if budget_filed_index is None:
-            raise ValueError('There is no budget filed in movies data!')
+            raise ValueError('There is no title field in movies data!')
+        if budget_field_index is None:
+            raise ValueError('There is no budget field in movies data!')
 
-        sorted_current_imdb_info = sorted(self.current_imdb_info, key=lambda x: x[budget_filed_index], reverse=True)
-        budgets = {film[title_field_index]: film[budget_filed_index] for film in sorted_current_imdb_info[:n]}
+        valid_movies = self._filter_valid_movies([title_field_index, budget_field_index])
+        sorted_current_imdb_info = sorted(valid_movies,
+                                          key=lambda x: x[budget_field_index],
+                                          reverse=True)
+        budgets = {film[title_field_index]: film[budget_field_index] for film in sorted_current_imdb_info[:n]}
+
         return budgets
         
     def most_profitable(self, n):
@@ -484,6 +529,30 @@ class Links:
         the values are the difference between cumulative worldwide gross and budget.
         Sorted by the difference descendingly.
         """
+        if not self.current_headers_info:
+            raise ValueError('The movie headers info is empty. Run get_imdb method first')
+        
+        title_field_index, budget_field_index, cum_world_gross_index  = None, None, None
+        for index, field in enumerate(self.current_headers_info):
+            if field in ('original_title', 'title', 'eng_title'):
+                title_field_index = index
+            elif field in ('budgets', 'budget'):
+                budget_field_index = index
+            elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
+                cum_world_gross_index = index
+        if title_field_index is None:
+            raise ValueError('There is no title field in movies data!')
+        if budget_field_index is None:
+            raise ValueError('There is no budget field in movies data!')
+        if cum_world_gross_index is None:
+            raise ValueError('There is no cumulative world gross field in movies data!')
+        
+        valid_movies = self._filter_valid_movies([title_field_index, budget_field_index, cum_world_gross_index])
+        sorted_current_imdb_info = sorted(valid_movies,
+                                          key=lambda x: x[cum_world_gross_index] - x[budget_field_index],
+                                          reverse=True)
+        profits = {film[title_field_index]: film[cum_world_gross_index] - film[budget_field_index] for film in sorted_current_imdb_info[:n]}
+
         return profits
         
     def longest(self, n):
@@ -491,6 +560,26 @@ class Links:
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are their runtime. Sorted by runtime descendingly.
         """
+        if not self.current_headers_info:
+            raise ValueError('The movie headers info is empty. Run get_imdb method first')
+        
+        title_field_index, duration_index = None, None
+        for index, field in enumerate(self.current_headers_info):
+            if field in ('original_title', 'title', 'eng_title'):
+                title_field_index = index
+            elif field in ('duration', 'runtime'):
+                duration_index = index
+        if title_field_index is None:
+            raise ValueError('There is no title field in movies data!')
+        if duration_index is None:
+            raise ValueError('There is no duration field in movies data!')
+        
+        valid_movies = self._filter_valid_movies([title_field_index, duration_index])
+        sorted_current_imdb_info = sorted(valid_movies,
+                                          key=lambda x: x[duration_index],
+                                          reverse=True)
+        runtimes = {film[title_field_index]: film[duration_index] for film in sorted_current_imdb_info[:n]}
+
         return runtimes
         
     def top_cost_per_minute(self, n):
@@ -499,4 +588,28 @@ class Links:
         the values are the budgets divided by their runtime.
         The values are rounded to 2 decimals. Sorted by the division descendingly.
         """
+        if not self.current_headers_info:
+            raise ValueError('The movie headers info is empty. Run get_imdb method first')
+        
+        title_field_index, budget_field_index, duration_index = None, None, None
+        for index, field in enumerate(self.current_headers_info):
+            if field in ('original_title', 'title', 'eng_title'):
+                title_field_index = index
+            elif field in ('budgets', 'budget'):
+                budget_field_index = index
+            elif field in ('duration', 'runtime'):
+                duration_index = index
+        if title_field_index is None:
+            raise ValueError('There is no title field in movies data!')
+        if budget_field_index is None:
+            raise ValueError('There is no budget field in movies data!')
+        if duration_index is None:
+            raise ValueError('There is no duration field in movies data!')
+        
+        valid_movies = self._filter_valid_movies([title_field_index, budget_field_index, duration_index])
+        sorted_current_imdb_info = sorted(valid_movies,
+                                          key=lambda x: x[budget_field_index] / x[duration_index],
+                                          reverse=True)
+        costs = {film[title_field_index]: film[budget_field_index] / film[duration_index] for film in sorted_current_imdb_info[:n]}
+
         return costs
