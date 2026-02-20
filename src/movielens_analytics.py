@@ -2,6 +2,7 @@ from datetime import datetime
 from collections import Counter
 import requests
 from bs4 import BeautifulSoup
+from typing import List, Dict
 
 
 class Ratings:
@@ -14,7 +15,7 @@ class Ratings:
         self.import_data_ratings(path_to_the_file)
         self.import_data_movies(path_to_the_file.replace('ratings.csv', 'movies.csv'))
 
-    def import_data_ratings(self, path):
+    def _import_data_ratings(self, path: str):
         """
         Import data from ratings.csv and transform it into list.
         Where each line of list is an list with cells values
@@ -27,7 +28,7 @@ class Ratings:
                 current_row[3] = int(current_row[3]) # timestamp
                 self.ratings_csv.append(current_row)
     
-    def import_data_movies(self, path):
+    def _import_data_movies(self, path: str):
         """
         Import data from movies.csv and transform it into list.
         Where each line of list is an list with cells values
@@ -41,7 +42,7 @@ class Ratings:
                 genres = parts[-1]
                 self.movies_csv.append([movie_id, title, genres])
 
-    def find_title_by_id(self, movie_id):
+    def find_title_by_id(self, movie_id: str) -> List[str | None]:
         """
         Finds movie by its id
         """
@@ -49,171 +50,158 @@ class Ratings:
             if row[0] == movie_id:
                 return row[1]
         return None
-
-    class Movies:
-        def __init__(self, parent):
-            self.parent = parent
              
-        def dist_by_year(self):
-            """
-            The method returns a dict where the keys are years and the values are counts. 
-            Sorted by years ascendingly. The years are extracted timestamps.
-            """
-            timestamps = [row[3] for row in self.parent.ratings_csv]
-            years = [datetime.fromtimestamp(ts).year for ts in timestamps]
-            ratings_by_year = dict(sorted(Counter(years).items()))
-            return ratings_by_year
-        
-        def dist_by_rating(self):
-            """
-            The method returns a dict where the keys are ratings and the values are counts.
-            Sorted by ratings ascendingly.
-            """
-            ratings = [row[2] for row in self.parent.ratings_csv]
-            ratings_distribution = dict(sorted(Counter(ratings).items()))
-            return ratings_distribution
-        
-        def top_by_num_of_ratings(self, n):
-            """
-            The method returns top-n movies by the number of ratings. 
-            It is a dict where the keys are movie titles and the values are numbers.
-            Sorted by numbers descendingly.
-            """
-            movie_counts = Counter([row[1] for row in self.parent.ratings_csv])
-            top_movies = {}
-            for movie_id, count in movie_counts.most_common(n):
-                top_movies[self.parent.find_title_by_id(movie_id)] = count
-            return top_movies
-        
-        def top_by_ratings(self, n, metric='average'):
-            """
-            The method returns top-n movies by the average or median of the ratings.
-            It is a dict where the keys are movie titles and the values are metric values.
-            Sorted by metric descendingly.
-            """
-            each_id_ratings = {}
-            for row in self.parent.ratings_csv:
+    def dist_by_year(self):
+        """
+        The method returns a dict where the keys are years and the values are counts. 
+        Sorted by years ascendingly. The years are extracted timestamps.
+        """
+        timestamps = [row[3] for row in self.ratings_csv]
+        years = [datetime.fromtimestamp(ts).year for ts in timestamps]
+        ratings_by_year = dict(sorted(Counter(years).items()))
+        return ratings_by_year
+    
+    def dist_by_rating(self, key: str = 'ratings') -> Dict:
+        """
+        The method returns a dict where the keys are ratings or users (depends on "key" param) 
+        and the values are counts. Sorted by ratings ascendingly.
+        """
+        if key.lower() == 'ratings':
+            ratings = [row[2] for row in self.ratings_csv]
+        elif key.lower() == 'users':
+            ratings = [row[0] for row in self.ratings_csv]
+        else:
+            raise ValueError('Unknown parameter for key. Insert "ratings" or "users"')
+        ratings_distribution = dict(sorted(Counter(ratings).items()))
+        return ratings_distribution
+    
+    def top_by_num_of_ratings(self, n: int = 10) -> Dict:
+        """
+        The method returns top-n movies by the number of ratings. 
+        It is a dict where the keys are movie titles and the values are numbers.
+        Sorted by numbers descendingly.
+        """
+        movie_counts = Counter([row[1] for row in self.ratings_csv])
+        top_movies = {}
+        for movie_id, count in movie_counts.most_common(n):
+            top_movies[self.find_title_by_id(movie_id)] = count
+        return top_movies
+    
+    def top_by_ratings(self, n: int = 10, key: str = 'movies',metric: str = 'average') -> Dict:
+        """
+        The method returns top-n movies or users (depends on "key" param) by the average or median of the ratings.
+        It is a dict where the keys are movie titles and the values are metric values.
+        Sorted by metric descendingly.
+        """
+        each_id_ratings = {}
+        if key.lower() == 'movies':
+            for row in self.ratings_csv:
                 movie_id = row[1]
                 rating = row[2]
                 if movie_id not in each_id_ratings.keys():
                     each_id_ratings[movie_id] = [rating]
                 else:
                     each_id_ratings[movie_id].append(rating)
+        elif key.lower() == 'users':
+            for row in self.ratings_csv:
+                user_id = row[0]
+                rating = row[2]
+                if user_id not in each_id_ratings.keys():
+                    each_id_ratings[user_id] = [rating]
+                else:
+                    each_id_ratings[user_id].append(rating)
+        else:
+            raise ValueError('Unknown parameter for key. Insert "movies" or "users"')  
 
-            metric_movies={}      
-            if metric == 'median':
+        metric_movies = {}      
+        if metric == 'median':
+            if key.lower() == 'movies':
                 for movie_id, ratings_list in each_id_ratings.items():
-                    if (len_ratings_list := len(ratings_list)) % 2 == 0:
-                        mid = len_ratings_list // 2
-                        metric_movies[self.parent.find_title_by_id(movie_id)] = ratings_list[mid - 1] + ratings_list[mid + 1]
-                    else:
-                        metric_movies[self.parent.find_title_by_id(movie_id)] = ratings_list[len_ratings_list // 2]
-            elif metric == 'average':
-                for movie_id, ratings_list in each_id_ratings.items():
-                    metric_movies[self.parent.find_title_by_id(movie_id)] = round(sum(ratings_list) / len(ratings_list), 2)
+                    # Sort ratings for median calculation
+                    sorted_ratings = sorted(ratings_list)
+                    length = len(sorted_ratings)
+                    
+                    if length % 2 == 0:  # Even length
+                        mid = length // 2
+                        # Average of two middle numbers
+                        median_value = (sorted_ratings[mid - 1] + sorted_ratings[mid]) / 2
+                    else:  # Odd length
+                        median_value = sorted_ratings[length // 2]
+                    
+                    metric_movies[self.find_title_by_id(movie_id)] = round(median_value, 2)
             else:
-                raise ValueError('Unknown metric parameter')
-            
-            top_movies = dict(sorted(metric_movies.items(), key=lambda x: x[1], reverse=True)[:n])
-            
-            return top_movies
+                for user_id, ratings_list in each_id_ratings.items():
+                    # Sort ratings for median calculation
+                    sorted_ratings = sorted(ratings_list)
+                    length = len(sorted_ratings)
+                    
+                    if length % 2 == 0:  # Even length
+                        mid = length // 2
+                        # Average of two middle numbers
+                        median_value = (sorted_ratings[mid - 1] + sorted_ratings[mid]) / 2
+                    else:  # Odd length
+                        median_value = sorted_ratings[length // 2]
+                    
+                    metric_movies[user_id] = round(median_value, 2)
+                    
+        elif metric == 'average':
+            if key.lower() == 'movies':
+                for movie_id, ratings_list in each_id_ratings.items():
+                    metric_movies[self.find_title_by_id(movie_id)] = round(sum(ratings_list) / len(ratings_list), 2)
+            else:
+                for user_id, ratings_list in each_id_ratings.items():
+                    metric_movies[user_id] = round(sum(ratings_list) / len(ratings_list), 2)
+                    
+        else:
+            raise ValueError('Unknown metric parameter')
         
-        def top_controversial(self, n):
-            """
-            The method returns top-n movies by the variance of the ratings.
-            It is a dict where the keys are movie titles and the values are the variances.
-            Sorted by variance descendingly.
-            """
-            def find_variance(ratings_list):
-                mean = sum(ratings_list) / (len_ratings_list := len(ratings_list))
-                var_numerator = 0
-                for rating in ratings_list:
-                    var_numerator += (rating - mean)**2
-                return round(var_numerator / len_ratings_list, 2)
+        top_movies = dict(sorted(metric_movies.items(), key=lambda x: x[1], reverse=True)[:n])
+        
+        return top_movies
+    
+    def top_controversial(self, key: str = 'movies', n: int = 10) -> Dict:
+        """
+        The method returns top-n movies or users (depends on "key" param) by the variance of the ratings.
+        It is a dict where the keys are movie titles and the values are the variances.
+        Sorted by variance descendingly.
+        """
+        def find_variance(ratings_list):
+            mean = sum(ratings_list) / (len_ratings_list := len(ratings_list))
+            var_numerator = 0
+            for rating in ratings_list:
+                var_numerator += (rating - mean)**2
+            return round(var_numerator / len_ratings_list, 2)
 
-            each_id_ratings = {}
-            for row in self.parent.ratings_csv:
+        each_id_ratings = {}
+        if key.lower() == 'movies':
+            for row in self.ratings_csv:
                 movie_id = row[1]
                 rating = row[2]
                 if movie_id not in each_id_ratings.keys():
                     each_id_ratings[movie_id] = [rating]
                 else:
                     each_id_ratings[movie_id].append(rating)
-            
-            movies_with_variance = {movie_id: find_variance(ratings_list) for movie_id, ratings_list in each_id_ratings.items()}
+            movies_with_variance = {self.find_title_by_id(movie_id): find_variance(ratings_list) for movie_id, ratings_list in each_id_ratings.items()}
             top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])
-
-            return top_movies
-
-    class Users(Movies):
-        def dist_by_rating(self):
-            """
-            The method returns a dict where the keys are users' id and the values are counts.
-            Sorted by ratings ascendingly.
-            """
-            ratings = [row[0] for row in self.parent.ratings_csv]
-            ratings_distribution = dict(sorted(Counter(ratings).items()))
-            return ratings_distribution
+            
+        elif key.lower() == 'users':
+            for row in self.ratings_csv:
+                user_id = row[0]
+                rating = row[2]
+                if user_id not in each_id_ratings.keys():
+                    each_id_ratings[user_id] = [rating]
+                else:
+                    each_id_ratings[user_id].append(rating)
+            users_with_variance = {user_id: find_variance(ratings_list) for user_id, ratings_list in each_id_ratings.items()}
+            top_movies = dict(sorted(users_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])            
         
-        def top_by_ratings(self, n, metric='average'):
-            """
-            The method returns top-n users by the average or median of the ratings.
-            It is a dict where the keys are users' id and the values are metric values.
-            Sorted by metric descendingly.
-            """
-            each_id_ratings = {}
-            for row in self.parent.ratings_csv:
-                user_id = row[0]
-                rating = row[2]
-                if user_id not in each_id_ratings.keys():
-                    each_id_ratings[user_id] = [rating]
-                else:
-                    each_id_ratings[user_id].append(rating)
+        else:
+            raise ValueError('Unknown parameter for key. Insert "movies" or "users"')     
+        
+        movies_with_variance = {movie_id: find_variance(ratings_list) for movie_id, ratings_list in each_id_ratings.items()}
+        top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])
 
-            metric_users={}      
-            if metric == 'median':
-                for user_id, ratings_list in each_id_ratings.items():
-                    if (len_ratings_list := len(ratings_list)) % 2 == 0:
-                        mid = len_ratings_list // 2
-                        metric_users[user_id] = ratings_list[mid - 1] + ratings_list[mid + 1]
-                    else:
-                        metric_users[user_id] = ratings_list[len_ratings_list // 2]
-            elif metric == 'average':
-                for user_id, ratings_list in each_id_ratings.items():
-                    metric_users[user_id] = round(sum(ratings_list) / len(ratings_list), 2)
-            else:
-                raise ValueError('Unknown metric parameter')
-            
-            top_users = dict(sorted(metric_users.items(), key=lambda x: x[1], reverse=True)[:n])
-            
-            return top_users
-  
-        def top_controversial(self, n):
-            """
-            The method returns top-n users by the variance of the ratings.
-            It is a dict where the keys are users' id and the values are the variances.
-            Sorted by variance descendingly.
-            """
-            def find_variance(ratings_list):
-                mean = sum(ratings_list) / (len_ratings_list := len(ratings_list))
-                var_numerator = 0
-                for rating in ratings_list:
-                    var_numerator += (rating - mean)**2
-                return round(var_numerator / len_ratings_list, 2)
-
-            each_id_ratings = {}
-            for row in self.parent.ratings_csv:
-                user_id = row[0]
-                rating = row[2]
-                if user_id not in each_id_ratings.keys():
-                    each_id_ratings[user_id] = [rating]
-                else:
-                    each_id_ratings[user_id].append(rating)
-            
-            movies_with_variance = {user_id: find_variance(ratings_list) for user_id, ratings_list in each_id_ratings.items()}
-            top_users = dict(sorted(movies_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])
-
-            return top_users
+        return top_movies
         
 
 class Links:
@@ -221,15 +209,12 @@ class Links:
     Analyzing data from links.csv
     """
     def __init__(self, path_to_the_file):
-        """
-        Put here any fields that you think you will need.
-        """
         self.current_imdb_info = []
         self.current_headers_info = []
         self.links_csv = []
         self.import_data_links(path_to_the_file)
     
-    def import_data_links(self, path, n=None):
+    def import_data_links(self, path: str, n: List[int | None] = None):
         """
         Import data from links.csv and transform it into array.
         Where each line of array is an array with cells values
@@ -249,7 +234,7 @@ class Links:
                         break
                     self.links_csv.append(line.strip().split(','))
     
-    def get_imdb(self, list_of_movies, list_of_fields):
+    def get_imdb(self, list_of_movies: List, list_of_fields: List):
         """
         The method returns a list of lists [movieId, field1, field2, field3, ...]
         for the list of movies given as the argument (movieId).
@@ -257,7 +242,7 @@ class Links:
         The values  are parsed from the IMDB webpages of the movies.
         Sorted by movieId descendingly.
         """
-        def money_converter(money_value):
+        def money_converter(money_value: str) -> int:
             """
             Function for parsed money values converting into numeric.
             Deleting '$' sign, commas and additional messages. For example:
@@ -290,7 +275,7 @@ class Links:
             except (ValueError, AttributeError):
                 return 0
         
-        def duration_converter(duration_value):
+        def duration_converter(duration_value: str) -> List[int | None]:
             """
             Function for parsed duration values. Converting into minutes count, numeric.
             Deleting 'h' and 'm' signs. For example:
@@ -314,13 +299,13 @@ class Links:
                 response = requests.get(link, headers=headers)
                 soup = BeautifulSoup(response.text, 'html.parser')
             except Exception:
-                raise f'Error with connecting to url for movieId: {movie_id}'
+                raise Exception(f'Error with connecting to url for movieId: {movie_id}')
 
             # Upper (black) part of IMDB HTML
             try:
                 black_part = soup.find('section', attrs={'data-testid': 'hero-parent'})
             except Exception:
-                raise f'Error with parsing upper (black) part for movieId: {movie_id}'
+                raise Exception(f'Error with parsing upper (black) part for movieId: {movie_id}')
             
             # Lower (white) part of IMDB HTML
             try:
@@ -531,7 +516,7 @@ class Links:
 
         return self.current_imdb_info
 
-    def top_directors(self, n):
+    def top_directors(self, n: int = 10) -> Dict:
         """
         The method returns a dict with top-n directors where the keys are directors and 
         the values are numbers of movies created by them. Sort it by numbers descendingly.
@@ -557,7 +542,7 @@ class Links:
 
         return directors
         
-    def most_expensive(self, n):
+    def most_expensive(self, n: int = 10) -> Dict:
         """
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are their budgets. Sort it by budgets descendingly.
@@ -596,7 +581,7 @@ class Links:
         
         return budgets
         
-    def most_profitable(self, n):
+    def most_profitable(self, n: int = 10) -> Dict:
         """
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are the difference between cumulative worldwide gross and budget.
@@ -648,7 +633,7 @@ class Links:
         
         return profits
         
-    def longest(self, n):
+    def longest(self, n: int = 10) -> Dict:
         if not self.current_headers_info:
             raise ValueError('The movie headers info is empty. Run get_imdb method first')
         
@@ -672,7 +657,7 @@ class Links:
         runtimes = {film[title_field_index + 1]: film[duration_index + 1] for film in sorted_movies[:n]}
         return runtimes
         
-    def top_cost_per_minute(self, n):
+    def top_cost_per_minute(self, n: int = 10) -> Dict:
         """
         The method returns a dict with top-n movies where the keys are movie titles and
         the values are the budgets divided by their runtime. The budgets can be in different currencies – do not pay attention to it. 
