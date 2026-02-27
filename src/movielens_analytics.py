@@ -12,8 +12,8 @@ class Ratings:
     def __init__(self, path_to_the_file):
         self.ratings_csv = []
         self.movies_csv = []
-        self.import_data_ratings(path_to_the_file)
-        self.import_data_movies(path_to_the_file.replace('ratings.csv', 'movies.csv'))
+        self._import_data_ratings(path_to_the_file)
+        self._import_data_movies(path_to_the_file.replace('ratings.csv', 'movies.csv'))
 
     def _import_data_ratings(self, path: str):
         """
@@ -155,7 +155,7 @@ class Ratings:
         else:
             raise ValueError('Unknown metric parameter')
         
-        top_movies = dict(sorted(metric_movies.items(), key=lambda x: x[1], reverse=True)[:n])
+        top_movies = dict(sorted(metric_movies.items(), key=lambda x: (-x[1], x[0]))[:n])
         
         return top_movies
     
@@ -182,7 +182,7 @@ class Ratings:
                 else:
                     each_id_ratings[movie_id].append(rating)
             movies_with_variance = {self.find_title_by_id(movie_id): find_variance(ratings_list) for movie_id, ratings_list in each_id_ratings.items()}
-            top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])
+            top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: (-x[1], x[0]))[:n])
             
         elif key.lower() == 'users':
             for row in self.ratings_csv:
@@ -193,13 +193,13 @@ class Ratings:
                 else:
                     each_id_ratings[user_id].append(rating)
             users_with_variance = {user_id: find_variance(ratings_list) for user_id, ratings_list in each_id_ratings.items()}
-            top_movies = dict(sorted(users_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])            
+            top_movies = dict(sorted(users_with_variance.items(), key=lambda x: (-x[1], x[0]))[:n])            
         
         else:
             raise ValueError('Unknown parameter for key. Insert "movies" or "users"')     
         
         movies_with_variance = {movie_id: find_variance(ratings_list) for movie_id, ratings_list in each_id_ratings.items()}
-        top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: x[1], reverse=True)[:n])
+        top_movies = dict(sorted(movies_with_variance.items(), key=lambda x: (-x[1], x[0]))[:n])
 
         return top_movies
         
@@ -208,13 +208,13 @@ class Links:
     """
     Analyzing data from links.csv
     """
-    def __init__(self, path_to_the_file):
+    def __init__(self, path_to_the_file:str, n: List[int | None] = None):
         self.current_imdb_info = []
         self.current_headers_info = []
         self.links_csv = []
-        self.import_data_links(path_to_the_file)
+        self._import_data_links(path_to_the_file, n)
     
-    def import_data_links(self, path: str, n: List[int | None] = None):
+    def _import_data_links(self, path: str, n: List[int | None] = None):
         """
         Import data from links.csv and transform it into array.
         Where each line of array is an array with cells values
@@ -624,9 +624,7 @@ class Links:
             movies_with_profit.append((film, profit))
         
         # Sort by profit descending
-        sorted_movies = sorted(movies_with_profit,
-                               key=lambda x: x[1], 
-                               reverse=True)
+        sorted_movies = sorted(movies_with_profit, key=lambda x: (-x[1], x[0]))
         
         # Create result dict with title (with +1 offset) and profit
         profits = {film[title_field_index + 1]: profit for film, profit in sorted_movies[:n]}
@@ -700,9 +698,7 @@ class Links:
             movies_with_cost_per_minute.append((film, cost_per_minute))
         
         # Sort by cost per minute descending
-        sorted_movies = sorted(movies_with_cost_per_minute, 
-                               key=lambda x: x[1], 
-                               reverse=True)
+        sorted_movies = sorted(movies_with_cost_per_minute, key=lambda x: (-x[1], x[0]))
         
         # Create result dict with title (with +1 offset) and rounded cost per minute
         costs = {film[title_field_index + 1]: round(cost_per_minute, 2) for film, cost_per_minute in sorted_movies[:n]}
@@ -710,12 +706,27 @@ class Links:
         return costs
 
 
-class Movies(Ratings):
+class Movies:
     """
     Analyzing data from movies.csv
     """
-    def __init__(self):
-        Ratings.__init__(self) # for _import_data_movies method inheritance from Ratings class
+    def __init__(self, path_to_the_file):
+        self.movies_csv = []
+        self._import_data_movies(path_to_the_file)
+    
+    def _import_data_movies(self, path: str):
+        """
+        Import data from movies.csv and transform it into list.
+        Where each line of list is an list with cells values
+        """
+        with open(path) as file:
+            next(file)
+            for line in file:
+                parts = line.strip().split(',')
+                movie_id = parts[0]
+                title = ','.join(parts[1:-1])
+                genres = parts[-1]
+                self.movies_csv.append([movie_id, title, genres])
         
     def dist_by_release(self) -> Dict:
         """
@@ -728,7 +739,7 @@ class Movies(Ratings):
             
         movie_titles = [row[1] for row in self.movies_csv]
         years = list(map(lambda x: year_extractor(x), movie_titles))
-        release_years = dict(sorted(Counter(years).items(), reverse=True))
+        release_years = dict(sorted(Counter(years).items(), key=lambda x: (-x[1], x[0])))
         return release_years
     
     def dist_by_genres(self) -> Dict:
@@ -745,7 +756,7 @@ class Movies(Ratings):
                    genres[genre] = 1
                 else:
                    genres[genre] += 1
-        genres = dict(sorted(genres.items(), reverse=True))  
+        genres = dict(sorted(genres.items(), key=lambda x: (-x[1], x[0])))  
                 
         return genres
         
@@ -754,11 +765,11 @@ class Movies(Ratings):
         The method returns a dict with top-n movies where the keys are movie titles and 
         the values are the number of genres of the movie. Sorted by numbers descendingly.
         """
-        movie_titles = [row[1].split()[:-1] for row in self.movies_csv]
+        movie_titles = [''.join(row[1].split()[:-1]) for row in self.movies_csv]
         movie_genres_count = [len(row[2].split('|')) for row in self.movies_csv]
         
         movies_dict = {movie_title: genres_count for movie_title, genres_count in zip(movie_titles, movie_genres_count)} 
-        movies = dict(sorted(movies_dict.items(), reverse=True)[:n])
+        movies = dict(sorted(movies_dict.items(), key=lambda x: (-x[1], x[0]))[:n])
         
         return movies
 
@@ -819,7 +830,7 @@ class Tags:
                 if tag not in word_count or num_words > word_count[tag]:
                     word_count[tag] = num_words
 
-            sorted_tags = sorted(word_count.items(), key=lambda x: x[1], reverse=True)
+            sorted_tags = sorted(word_count.items(), key=lambda x: (-x[1], x[0]))
             
             result = dict(sorted_tags[:n])
             return result
@@ -842,7 +853,7 @@ class Tags:
                 if tag not in length_dict or tag_length > length_dict[tag]:
                     length_dict[tag] = tag_length
             
-            sorted_tags = sorted(length_dict.items(), key=lambda x: x[1], reverse=True)
+            sorted_tags = sorted(length_dict.items(), key=lambda x: (-x[1], x[0]))
             
             result = [tag for tag, _ in sorted_tags[:n]]
             return result
@@ -864,7 +875,7 @@ class Tags:
                 if tag not in word_count or num_words > word_count[tag]:
                     word_count[tag] = num_words
             
-            top_words = set([tag for tag, _ in sorted(word_count.items(),key=lambda x: x[1],reverse=True)[:n]])
+            top_words = set([tag for tag, _ in sorted(word_count.items(), key=lambda x: (-x[1], x[0]))[:n]])
             
 
             length_dict = {}
@@ -874,7 +885,7 @@ class Tags:
                 if tag not in length_dict or tag_length > length_dict[tag]:
                     length_dict[tag] = tag_length
             
-            top_longest = set([tag for tag, _ in sorted(length_dict.items(),key=lambda x: x[1],reverse=True)[:n]])
+            top_longest = set([tag for tag, _ in sorted(length_dict.items(), key=lambda x: (-x[1], x[0]))[:n]])
             
 
             result = sorted(list(top_words & top_longest))
@@ -896,7 +907,7 @@ class Tags:
                 tag = tag_item['tag']
                 popularity[tag] = popularity.get(tag, 0) + 1
             
-            sorted_tags = sorted(popularity.items(), key=lambda x: x[1], reverse=True)
+            sorted_tags = sorted(popularity.items(), key=lambda x: (-x[1], x[0]))
             
             result = dict(sorted_tags[:n])
             return result
