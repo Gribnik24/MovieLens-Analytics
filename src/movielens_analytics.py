@@ -708,3 +708,56 @@ class Links:
         costs = {film[title_field_index + 1]: round(cost_per_minute, 2) for film, cost_per_minute in sorted_movies[:n]}
         
         return costs
+
+
+class Movies(Ratings):
+    """
+    Analyzing data from movies.csv
+    """
+    def __init__(self):
+        Ratings.__init__(self) # for _import_data_movies method inheritance from Ratings class
+        
+    def dist_by_release(self) -> Dict:
+        """
+        The method returns a dict where the keys are years and the values are counts. 
+        The years are extracted from the titles. Sorted by counts descendingly.
+        """
+        def year_extractor(title):
+            year = title.split()[-1].strip('()')
+            return year
+            
+        movie_titles = [row[1] for row in self.movies_csv]
+        years = list(map(lambda x: year_extractor(x), movie_titles))
+        release_years = dict(sorted(Counter(years).items(), reverse=True))
+        return release_years
+    
+    def dist_by_genres(self) -> Dict:
+        """
+        The method returns a dict where the keys are genres and the values are counts.
+        Sorted by counts descendingly.
+        """
+        movie_genres = list(map(lambda x: x.split('|'), [row[2] for row in self.movies_csv]))
+        genres = {}
+        
+        for movie in movie_genres:
+            for genre in movie:
+                if genre not in genres.keys():
+                   genres[genre] = 1
+                else:
+                   genres[genre] += 1
+        genres = dict(sorted(genres.items(), reverse=True))  
+                
+        return genres
+        
+    def most_genres(self, n: int = 10) -> Dict:
+        """
+        The method returns a dict with top-n movies where the keys are movie titles and 
+        the values are the number of genres of the movie. Sorted by numbers descendingly.
+        """
+        movie_titles = [row[1].split()[:-1] for row in self.movies_csv]
+        movie_genres_count = [len(row[2].split('|')) for row in self.movies_csv]
+        
+        movies_dict = {movie_title: genres_count for movie_title, genres_count in zip(movie_titles, movie_genres_count)} 
+        movies = dict(sorted(movies_dict.items(), reverse=True)[:n])
+        
+        return movies
