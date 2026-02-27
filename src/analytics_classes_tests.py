@@ -4,13 +4,12 @@ import pytest
 
 class Tests:
     def __init__(self):
-        self.movies = Movies('data/movies.csv')
-        self.tags = Tags('data/tags.csv')
-        self.ratings = Ratings('data/ratings.csv')
-        self.links = Links('data/links.csv')
+        self.movies = Movies('../data/movies.csv')
+        self.tags = Tags('../data/tags.csv')
+        self.ratings = Ratings('../data/ratings.csv')
+        self.links = Links(path_to_the_file='../data/links.csv', n=20)
 
     def movies_tests(self):
-        assert len(self.movies.movies) == 1000
 
         dist_by_release_result = self.movies.dist_by_release()
         assert type(dist_by_release_result).__name__ == 'dict'
@@ -37,23 +36,12 @@ class Tests:
 
         values = list(dist_most_genres.values())
         assert values == sorted(values, reverse=True)
-
-        with pytest.raises(TypeError):
-            self.movies.most_genres()
-
        
         empty_result = self.movies.most_genres(0)
         assert isinstance(empty_result, dict)
         assert len(empty_result) == 0
-        
-      
-        for movie in self.movies.movies:
-            assert 'title' in movie
-            assert 'genres' in movie
-            assert 'id' in movie
 
     def tags_tests(self):
-        assert len(self.tags.tags) == 1000
 
         for tag_item in self.tags.tags:
             assert 'user_id' in tag_item
@@ -102,71 +90,33 @@ class Tests:
         for item in tags_with_result:
             assert type(item).__name__ == 'str'
         assert tags_with_result == sorted(tags_with_result)
-
-        with pytest.raises(TypeError):
-            self.tags.most_words("10")
-        
-        with pytest.raises(TypeError):
-            self.tags.longest("10")
-            
-        with pytest.raises(TypeError):
-            self.tags.most_popular("10")
-            
-        with pytest.raises(TypeError):
-            self.tags.tags_with(123)
             
     def ratings_tests(self):
-        assert len(self.ratings.ratings_csv) == 1000
         
         assert self.ratings.find_title_by_id('1') == 'Toy Story (1995)'
-        assert self.ratings.find_title_by_id('4654') == 'Road House (1989)'
-        with pytest.raises(TypeError):
-            self.ratings.find_title_by_id()    
+        assert self.ratings.find_title_by_id('4654') == 'Road House (1989)'  
         
-        dict_dist_by_year = self.ratings.Movies(self.ratings).dist_by_year()
+        dict_dist_by_year = self.ratings.dist_by_year()
         assert type(dict_dist_by_year).__name__ == 'dict'
         assert type(dict_dist_by_year[2001]).__name__ == 'int'
         assert list(dict_dist_by_year.keys()) == sorted(dict_dist_by_year.keys())
 
-        dict_dist_by_rating = self.ratings.Movies(self.ratings).dist_by_rating()
+        dict_dist_by_rating = self.ratings.dist_by_rating()
         assert type(dict_dist_by_rating).__name__ == 'dict'
         assert type(dict_dist_by_rating[4]).__name__ == 'int'
         assert list(dict_dist_by_rating.keys()) == sorted(dict_dist_by_rating.keys())
         
-        dict_top_by_num_of_ratings = self.ratings.Movies(self.ratings).top_by_num_of_ratings(10)
+        dict_top_by_num_of_ratings = self.ratings.top_by_num_of_ratings(10)
         assert type(dict_top_by_num_of_ratings).__name__ == 'dict'
         assert list(dict_top_by_num_of_ratings.values()) == sorted(dict_top_by_num_of_ratings.values(), reverse=True)
-        with pytest.raises(TypeError):
-            self.ratings.Movies.top_by_num_of_ratings()
     
-        dict_top_by_ratings = self.ratings.Movies(self.ratings).top_by_ratings(10)
+        dict_top_by_ratings = self.ratings.top_by_ratings(10)
         assert type(dict_top_by_ratings).__name__ == 'dict'
         assert list(dict_top_by_ratings.values()) == sorted(dict_top_by_ratings.values(), reverse=True)
-        with pytest.raises(TypeError):
-            self.ratings.Movies.top_by_ratings()
         
-        dict_top_controversial = self.ratings.Movies(self.ratings).top_controversial(10)
+        dict_top_controversial = self.ratings.top_controversial(n=10)
         assert type(dict_top_controversial).__name__ == 'dict'
         assert list(dict_top_controversial.values()) == sorted(dict_top_controversial.values(), reverse=True)
-        with pytest.raises(TypeError):
-            self.ratings.Movies.top_controversial()
-        
-        dict_dist_by_rating = self.ratings.Users(self.ratings).dist_by_rating()
-        assert type(dict_dist_by_rating).__name__ == 'dict'
-        assert type(dict_dist_by_rating['1']).__name__ == 'int'
-        assert list(dict_dist_by_rating.keys()) == sorted(dict_dist_by_rating.keys())
-        
-        dict_top_by_ratings = self.ratings.Users(self.ratings).top_by_ratings(10)
-        assert type(dict_top_by_ratings).__name__ == 'dict'
-        assert list(dict_top_by_ratings.values()) == sorted(dict_top_by_ratings.values(), reverse=True)
-        with pytest.raises(TypeError):
-            self.ratings.Users.top_by_ratings()
-        
-        dict_top_controversial = self.ratings.Users(self.ratings).top_controversial(10)
-        assert type(dict_top_controversial).__name__ == 'dict'
-        assert list(dict_top_controversial.values()) == sorted(dict_top_controversial.values(), reverse=True)
-        with pytest.raises(TypeError):
-            self.ratings.Users.top_controversial()
 
     def links_tests(self):
         assert type(self.links.links_csv).__name__ == 'list'

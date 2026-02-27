@@ -5,6 +5,8 @@ def main():
     
     tests.ratings_tests()
     tests.links_tests()
+    tests.movies_tests()
+    tests.tags_tests()
     
 
 if __name__ == '__main__':
