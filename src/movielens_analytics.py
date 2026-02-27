@@ -761,3 +761,165 @@ class Movies(Ratings):
         movies = dict(sorted(movies_dict.items(), reverse=True)[:n])
         
         return movies
+
+
+class Tags:
+    """
+    Analyzing data from tags.csv
+    """
+    def __init__(self, path_to_the_file):  
+        self.tags = []
+        self._load_tags(path_to_the_file)  
+    
+    def _load_tags(self, path_to_the_file):
+        try:
+            with open(path_to_the_file) as file:
+                next(file)  
+
+                for line in file:
+                    parts = line.strip().split(',')
+                    if len(parts) >= 4:
+                        user_id = parts[0]
+                        movie_id = parts[1]
+                        
+                        if len(parts) > 4:
+                            tag = ','.join(parts[2:-1])
+                        else:
+                            tag = parts[2]
+                        
+                        timestamp = parts[-1]
+                        
+                        self.tags.append({
+                            'user_id': user_id,
+                            'movie_id': movie_id,
+                            'tag': tag.strip(),
+                            'timestamp': timestamp
+                        })
+                        
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Error: File {path_to_the_file} not found")
+        except Exception as e:
+            raise Exception(f"Error reading file: {e}")
+
+    def most_words(self, n: int = 10) -> Dict:
+        """
+        The method returns top-n tags with most words inside. It is a dict 
+        where the keys are tags and the values are the number of words inside the tag.
+        The duplicates are dropped. Sorted by numbers descendingly.
+        """   
+        try:
+            word_count = {}
+            
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+
+                words = tag.split()
+                num_words = len(words)
+                
+                if tag not in word_count or num_words > word_count[tag]:
+                    word_count[tag] = num_words
+
+            sorted_tags = sorted(word_count.items(), key=lambda x: x[1], reverse=True)
+            
+            result = dict(sorted_tags[:n])
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error in most_words: {e}")
+
+    def longest(self, n: int = 10) -> Dict:
+        """
+        The method returns top-n longest tags in terms of the number of characters.
+        It is a list of the tags. Drop the duplicates. Sort it by numbers descendingly.
+        """            
+        try:
+            length_dict = {}
+            
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+                tag_length = len(tag)
+                
+                if tag not in length_dict or tag_length > length_dict[tag]:
+                    length_dict[tag] = tag_length
+            
+            sorted_tags = sorted(length_dict.items(), key=lambda x: x[1], reverse=True)
+            
+            result = [tag for tag, _ in sorted_tags[:n]]
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error in longest: {e}")
+
+    def most_words_and_longest(self, n: int = 10) -> List:
+        """
+        The method returns the intersection between top-n tags with most words inside and 
+        top-n longest tags in terms of the number of characters.
+        The duplicates are dropped. It is a list of the tags.
+        """    
+        try:
+            word_count = {}
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+                num_words = len(tag.split())
+                if tag not in word_count or num_words > word_count[tag]:
+                    word_count[tag] = num_words
+            
+            top_words = set([tag for tag, _ in sorted(word_count.items(),key=lambda x: x[1],reverse=True)[:n]])
+            
+
+            length_dict = {}
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+                tag_length = len(tag)
+                if tag not in length_dict or tag_length > length_dict[tag]:
+                    length_dict[tag] = tag_length
+            
+            top_longest = set([tag for tag, _ in sorted(length_dict.items(),key=lambda x: x[1],reverse=True)[:n]])
+            
+
+            result = sorted(list(top_words & top_longest))
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error in most_words_and_longest: {e}")
+
+    def most_popular(self, n: int = 10) -> Dict:
+        """
+        The method returns the most popular tags. 
+        It is a dict where the keys are tags and the values are the counts.
+        The duplicates are dropped. Sorted by counts descendingly.
+        """            
+        try:
+            popularity = {}
+            
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+                popularity[tag] = popularity.get(tag, 0) + 1
+            
+            sorted_tags = sorted(popularity.items(), key=lambda x: x[1], reverse=True)
+            
+            result = dict(sorted_tags[:n])
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error in most_popular: {e}")
+
+    def tags_with(self, word: str) -> List:
+        """
+        The method returns all unique tags that include the word given as the argument.
+        The duplicates are dropped. It is a list of the tags. Sorted by tag names alphabetically.
+        """            
+        try:
+            matching_tags = set()
+            word_lower = word.lower()
+            
+            for tag_item in self.tags:
+                tag = tag_item['tag']
+                if word_lower in tag.lower():
+                    matching_tags.add(tag)
+            
+            result = sorted(list(matching_tags))
+            return result
+            
+        except Exception as e:
+            raise Exception(f"Error in tags_with: {e}")
