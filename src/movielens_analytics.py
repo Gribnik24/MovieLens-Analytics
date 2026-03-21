@@ -667,27 +667,31 @@ class Links:
         the values are numbers of movies created by them. Sort it by numbers descendingly.
         """
         logging.info('Starting Links.top_directors')
-        if not self.current_headers_info:
-            logging.error('There is no movie headers for starting this method.')
-            raise ValueError('The movie headers info is empty. Run get_imdb method first')
-        
-        director_field_index = None
-        for index, field in enumerate(self.current_headers_info):
-            if field in ('directors', 'director'):
-                director_field_index = index
-        if director_field_index is None:
-            logging.error('There is no director field in movies data.')
-            raise ValueError('There is no director field in movies data.')
-        
-        all_directors = []
-        for film in self.current_imdb_info:
-            directors_data = film[director_field_index]
-            if isinstance(directors_data, list):
-                all_directors.extend(directors_data)
-            elif directors_data:
-                all_directors.append(directors_data) 
-        directors = dict(Counter(all_directors).most_common(n))
-        logging.info('The result dict was created successfully')
+        try:
+            if not self.current_headers_info:
+                logging.error('There is no movie headers for starting this method.')
+                raise ValueError('The movie headers info is empty. Run get_imdb method first')
+            
+            director_field_index = None
+            for index, field in enumerate(self.current_headers_info):
+                if field in ('directors', 'director'):
+                    director_field_index = index
+            if director_field_index is None:
+                logging.error('There is no director field in movies data.')
+                raise ValueError('There is no director field in movies data.')
+            
+            all_directors = []
+            for film in self.current_imdb_info:
+                directors_data = film[director_field_index]
+                if isinstance(directors_data, list):
+                    all_directors.extend(directors_data)
+                elif directors_data:
+                    all_directors.append(directors_data) 
+            directors = dict(Counter(all_directors).most_common(n))
+            logging.info('The result dict was created successfully')
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
 
         return directors
         
@@ -697,42 +701,45 @@ class Links:
         the values are their budgets. Sort it by budgets descendingly.
         """
         logging.info('Starting Links.most_expensive')
-        if not self.current_headers_info:
-            logging.error('There is no movie headers for starting this method.')
-            raise ValueError('The movie headers info is empty. Run get_imdb method first')
-        
-        title_field_index, budget_field_index = None, None
-        for index, field in enumerate(self.current_headers_info):
-            if field in ('original_title', 'title', 'eng_title'):
-                title_field_index = index
-            elif field in ('budgets', 'budget'):
-                budget_field_index = index
-        
-        if title_field_index is None:
-            logging.error('There is no title field in movies data.')
-            raise ValueError('There is no title field in movies data!')
-        if budget_field_index is None:
-            logging.error('There is no budget field in movies data.')
-            raise ValueError('There is no budget field in movies data!')
+        try:
+            if not self.current_headers_info:
+                logging.error('There is no movie headers for starting this method.')
+                raise ValueError('The movie headers info is empty. Run get_imdb method first')
+            
+            title_field_index, budget_field_index = None, None
+            for index, field in enumerate(self.current_headers_info):
+                if field in ('original_title', 'title', 'eng_title'):
+                    title_field_index = index
+                elif field in ('budgets', 'budget'):
+                    budget_field_index = index
+            
+            if title_field_index is None:
+                logging.error('There is no title field in movies data.')
+                raise ValueError('There is no title field in movies data!')
+            if budget_field_index is None:
+                logging.error('There is no budget field in movies data.')
+                raise ValueError('There is no budget field in movies data!')
 
-        # Add +1 when accessing data to account for movie_id at position 0
-        valid_movies = []
-        for film in self.current_imdb_info:
-            # Check if both title and budget exist and budget is not None and > 0
-            if (film[title_field_index + 1] is not None and 
-                film[budget_field_index + 1] is not None and
-                film[budget_field_index + 1] > 0):  # Only include movies with actual budget
-                valid_movies.append(film)
-        
-        # Sort by budget (with +1 offset)
-        sorted_movies = sorted(valid_movies,
-                               key=lambda x: x[budget_field_index + 1],
-                               reverse=True)
-        
-        # Create result dict with title (with +1 offset) and budget (with +1 offset)
-        budgets = {film[title_field_index + 1]: film[budget_field_index + 1] for film in sorted_movies[:n]}
-        logging.info('The result dict was created successfully')
-        
+            # Add +1 when accessing data to account for movie_id at position 0
+            valid_movies = []
+            for film in self.current_imdb_info:
+                # Check if both title and budget exist and budget is not None and > 0
+                if (film[title_field_index + 1] is not None and 
+                    film[budget_field_index + 1] is not None and
+                    film[budget_field_index + 1] > 0):  # Only include movies with actual budget
+                    valid_movies.append(film)
+            
+            # Sort by budget (with +1 offset)
+            sorted_movies = sorted(valid_movies,
+                                key=lambda x: x[budget_field_index + 1],
+                                reverse=True)
+            
+            # Create result dict with title (with +1 offset) and budget (with +1 offset)
+            budgets = {film[title_field_index + 1]: film[budget_field_index + 1] for film in sorted_movies[:n]}
+            logging.info('The result dict was created successfully')
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
         return budgets
         
     def most_profitable(self, n: int = 10) -> Dict:
@@ -742,89 +749,96 @@ class Links:
         Sort it by the difference descendingly.
         """
         logging.info('Starting Links.most_expensive')
-        if not self.current_headers_info:
-            logging.error('There is no movie headers for starting this method.')
-            raise ValueError('The movie headers info is empty. Run get_imdb method first')
-        
-        title_field_index, budget_field_index, cum_world_gross_index = None, None, None
-        for index, field in enumerate(self.current_headers_info):
-            if field in ('original_title', 'title', 'eng_title'):
-                title_field_index = index
-            elif field in ('budgets', 'budget'):
-                budget_field_index = index
-            elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
-                cum_world_gross_index = index
-        
-        if title_field_index is None:
-            logging.error('There is no title field in movies data.')
-            raise ValueError('There is no title field in movies data!')
-        if budget_field_index is None:
-            logging.error('There is no budget field in movies data.')
-            raise ValueError('There is no budget field in movies data!')
-        if cum_world_gross_index is None:
-            logging.error('There is no cumulative world gross field in movies data.')
-            raise ValueError('There is no cumulative world gross field in movies data!')
-        
-        # Add +1 when accessing data to account for movie_id at position 0
-        valid_movies = []
-        for film in self.current_imdb_info:
-            # Check if all required fields exist and are valid
-            if (film[title_field_index + 1] is not None and 
-                film[budget_field_index + 1] is not None and
-                film[cum_world_gross_index + 1] is not None and
-                film[budget_field_index + 1] > 0 and  # Budget should be positive
-                film[cum_world_gross_index + 1] > 0):  # Gross should be positive
-                valid_movies.append(film)
-        
-        # Calculate profit and sort (with +1 offsets)
-        movies_with_profit = []
-        for film in valid_movies:
-            profit = film[cum_world_gross_index + 1] - film[budget_field_index + 1]
-            movies_with_profit.append((film, profit))
-        
-        # Sort by profit descending
-        sorted_movies = sorted(movies_with_profit, key=lambda x: (-x[1], x[0]))
-        
-        # Create result dict with title (with +1 offset) and profit
-        profits = {film[title_field_index + 1]: profit for film, profit in sorted_movies[:n]}
-        logging.info('The result dict was created successfully')
+        try:
+            if not self.current_headers_info:
+                logging.error('There is no movie headers for starting this method.')
+                raise ValueError('The movie headers info is empty. Run get_imdb method first')
+            
+            title_field_index, budget_field_index, cum_world_gross_index = None, None, None
+            for index, field in enumerate(self.current_headers_info):
+                if field in ('original_title', 'title', 'eng_title'):
+                    title_field_index = index
+                elif field in ('budgets', 'budget'):
+                    budget_field_index = index
+                elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
+                    cum_world_gross_index = index
+            
+            if title_field_index is None:
+                logging.error('There is no title field in movies data.')
+                raise ValueError('There is no title field in movies data!')
+            if budget_field_index is None:
+                logging.error('There is no budget field in movies data.')
+                raise ValueError('There is no budget field in movies data!')
+            if cum_world_gross_index is None:
+                logging.error('There is no cumulative world gross field in movies data.')
+                raise ValueError('There is no cumulative world gross field in movies data!')
+            
+            # Add +1 when accessing data to account for movie_id at position 0
+            valid_movies = []
+            for film in self.current_imdb_info:
+                # Check if all required fields exist and are valid
+                if (film[title_field_index + 1] is not None and 
+                    film[budget_field_index + 1] is not None and
+                    film[cum_world_gross_index + 1] is not None and
+                    film[budget_field_index + 1] > 0 and  # Budget should be positive
+                    film[cum_world_gross_index + 1] > 0):  # Gross should be positive
+                    valid_movies.append(film)
+            
+            # Calculate profit and sort (with +1 offsets)
+            movies_with_profit = []
+            for film in valid_movies:
+                profit = film[cum_world_gross_index + 1] - film[budget_field_index + 1]
+                movies_with_profit.append((film, profit))
+            
+            # Sort by profit descending
+            sorted_movies = sorted(movies_with_profit, key=lambda x: (-x[1], x[0]))
+            
+            # Create result dict with title (with +1 offset) and profit
+            profits = {film[title_field_index + 1]: profit for film, profit in sorted_movies[:n]}
+            logging.info('The result dict was created successfully')
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
 
         return profits
         
     def longest(self, n: int = 10) -> Dict:
         logging.info('Starting Links.longest')
-        if not self.current_headers_info:
-            logging.error('There is no movie headers for starting this method.')
-            raise ValueError('The movie headers info is empty. Run get_imdb method first')
-        
-        title_field_index, duration_index = None, None
-        for index, field in enumerate(self.current_headers_info):
-            if field in ('original_title', 'title', 'eng_title'):
-                title_field_index = index
-            elif field in ('duration', 'runtime'):
-                duration_index = index
-                
-        if title_field_index is None:
-            logging.error('There is no title field in movies data.')
-            raise ValueError('There is no title field in movies data!')
-        if duration_index is None:
-            logging.error('There is no duration field in movies data.')
-            raise ValueError('There is no duration field in movies data!')
-        
-        # Add +1 when accessing data!
-        valid_movies = []
-        for film in self.current_imdb_info:
-            if film[title_field_index + 1] is not None and film[duration_index + 1] is not None:
-                valid_movies.append(film)
-        
-        sorted_movies = sorted(valid_movies, 
-                               key=lambda x: x[duration_index + 1], 
-                               reverse=True)
-        
-        
-        runtimes = {film[title_field_index + 1]: film[duration_index + 1] for film in sorted_movies[:n]}
-        logging.info('The result dict was created successfully')
-
+        try:
+            if not self.current_headers_info:
+                logging.error('There is no movie headers for starting this method.')
+                raise ValueError('The movie headers info is empty. Run get_imdb method first')
+            
+            title_field_index, duration_index = None, None
+            for index, field in enumerate(self.current_headers_info):
+                if field in ('original_title', 'title', 'eng_title'):
+                    title_field_index = index
+                elif field in ('duration', 'runtime'):
+                    duration_index = index
+                    
+            if title_field_index is None:
+                logging.error('There is no title field in movies data.')
+                raise ValueError('There is no title field in movies data!')
+            if duration_index is None:
+                logging.error('There is no duration field in movies data.')
+                raise ValueError('There is no duration field in movies data!')
+            
+            # Add +1 when accessing data!
+            valid_movies = []
+            for film in self.current_imdb_info:
+                if film[title_field_index + 1] is not None and film[duration_index + 1] is not None:
+                    valid_movies.append(film)
+            
+            sorted_movies = sorted(valid_movies, 
+                                key=lambda x: x[duration_index + 1], 
+                                reverse=True)
+            
+            
+            runtimes = {film[title_field_index + 1]: film[duration_index + 1] for film in sorted_movies[:n]}
+            logging.info('The result dict was created successfully')
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
         return runtimes
         
     def top_cost_per_minute(self, n: int = 10) -> Dict:
@@ -834,53 +848,56 @@ class Links:
         The values should be rounded to 2 decimals. Sort it by the division descendingly.
         """
         logging.info('Starting Links.top_cost_per_minute')
-        if not self.current_headers_info:
-            logging.error('There is no movie headers for starting this method.')
-            raise ValueError('The movie headers info is empty. Run get_imdb method first')
-        
-        title_field_index, budget_field_index, duration_index = None, None, None
-        for index, field in enumerate(self.current_headers_info):
-            if field in ('original_title', 'title', 'eng_title'):
-                title_field_index = index
-            elif field in ('budgets', 'budget'):
-                budget_field_index = index
-            elif field in ('duration', 'runtime'):
-                duration_index = index
-        
-        if title_field_index is None:
-            logging.error('There is no title field in movies data.')
-            raise ValueError('There is no title field in movies data!')
-        if budget_field_index is None:
-            logging.error('There is no budget field in movies data.')
-            raise ValueError('There is no budget field in movies data!')
-        if duration_index is None:
-            logging.error('There is no duration field in movies data.')
-            raise ValueError('There is no duration field in movies data!')
-        
-        # Add +1 when accessing data to account for movie_id at position 0
-        valid_movies = []
-        for film in self.current_imdb_info:
-            # Check if all required fields exist and are valid
-            if (film[title_field_index + 1] is not None and 
-                film[budget_field_index + 1] is not None and
-                film[duration_index + 1] is not None and
-                film[budget_field_index + 1] > 0 and  # Budget should be positive
-                film[duration_index + 1] > 0):  # Duration should be positive
-                valid_movies.append(film)
-        
-        # Calculate cost per minute and sort (with +1 offsets)
-        movies_with_cost_per_minute = []
-        for film in valid_movies:
-            cost_per_minute = film[budget_field_index + 1] / film[duration_index + 1]
-            movies_with_cost_per_minute.append((film, cost_per_minute))
-        
-        # Sort by cost per minute descending
-        sorted_movies = sorted(movies_with_cost_per_minute, key=lambda x: (-x[1], x[0]))
-        
-        # Create result dict with title (with +1 offset) and rounded cost per minute
-        costs = {film[title_field_index + 1]: round(cost_per_minute, 2) for film, cost_per_minute in sorted_movies[:n]}
-        logging.info('The result dict was created successfully')
-
+        try:
+            if not self.current_headers_info:
+                logging.error('There is no movie headers for starting this method.')
+                raise ValueError('The movie headers info is empty. Run get_imdb method first')
+            
+            title_field_index, budget_field_index, duration_index = None, None, None
+            for index, field in enumerate(self.current_headers_info):
+                if field in ('original_title', 'title', 'eng_title'):
+                    title_field_index = index
+                elif field in ('budgets', 'budget'):
+                    budget_field_index = index
+                elif field in ('duration', 'runtime'):
+                    duration_index = index
+            
+            if title_field_index is None:
+                logging.error('There is no title field in movies data.')
+                raise ValueError('There is no title field in movies data!')
+            if budget_field_index is None:
+                logging.error('There is no budget field in movies data.')
+                raise ValueError('There is no budget field in movies data!')
+            if duration_index is None:
+                logging.error('There is no duration field in movies data.')
+                raise ValueError('There is no duration field in movies data!')
+            
+            # Add +1 when accessing data to account for movie_id at position 0
+            valid_movies = []
+            for film in self.current_imdb_info:
+                # Check if all required fields exist and are valid
+                if (film[title_field_index + 1] is not None and 
+                    film[budget_field_index + 1] is not None and
+                    film[duration_index + 1] is not None and
+                    film[budget_field_index + 1] > 0 and  # Budget should be positive
+                    film[duration_index + 1] > 0):  # Duration should be positive
+                    valid_movies.append(film)
+            
+            # Calculate cost per minute and sort (with +1 offsets)
+            movies_with_cost_per_minute = []
+            for film in valid_movies:
+                cost_per_minute = film[budget_field_index + 1] / film[duration_index + 1]
+                movies_with_cost_per_minute.append((film, cost_per_minute))
+            
+            # Sort by cost per minute descending
+            sorted_movies = sorted(movies_with_cost_per_minute, key=lambda x: (-x[1], x[0]))
+            
+            # Create result dict with title (with +1 offset) and rounded cost per minute
+            costs = {film[title_field_index + 1]: round(cost_per_minute, 2) for film, cost_per_minute in sorted_movies[:n]}
+            logging.info('The result dict was created successfully')
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)            
         return costs
 
 
