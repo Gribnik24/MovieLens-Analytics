@@ -22,7 +22,7 @@ class Ratings:
         Import data from ratings.csv and transform it into list.
         Where each line of list is an list with cells values
         """
-        logging.debug('Ratings._import_data_ratings method starting')
+        logging.debug('Ratings._import_data_ratings starting.')
         try:
             with open(path) as file:
                 next(file)
@@ -43,7 +43,7 @@ class Ratings:
         Import data from movies.csv and transform it into list.
         Where each line of list is an list with cells values
         """
-        logging.debug('Ratings._import_data_movies method starting')
+        logging.debug('Ratings._import_data_movies starting.')
         try:
             with open(path) as file:
                 next(file)
@@ -77,7 +77,7 @@ class Ratings:
         The method returns a dict where the keys are years and the values are counts. 
         Sorted by years ascendingly. The years are extracted timestamps.
         """
-        logging.info(f'Starting Ratings.dist_by_year for creating years film count distribution')
+        logging.info(f'Ratings.dist_by_year starting.')
         try:
             timestamps = [row[3] for row in self.ratings_csv]
             logging.debug('Timestamps were parsed successfully')
@@ -88,6 +88,7 @@ class Ratings:
         except Exception as e:
             logging.error(f'Failed to create distribution. Error message: {e}')
             raise ValueError(e)
+        logging.info('The result dict was created successfully')
         return ratings_by_year
     
     def dist_by_rating(self, key: str = 'ratings') -> Dict:
@@ -111,6 +112,7 @@ class Ratings:
         except Exception as e:
             logging.error(f'Failed to create distribution. Error message: {e}')
             raise ValueError(e)
+        logging.info('The result dict was created successfully')
         return ratings_distribution
     
     def top_by_num_of_ratings(self, n: int = 10) -> Dict:
@@ -130,6 +132,7 @@ class Ratings:
         except Exception as e:
             logging.error(f'Failed return top {n}. Error message: {e}')
             raise ValueError(e)
+        logging.info('The result dict was created successfully')
         return top_movies
     
     def top_by_ratings(self, n: int = 10, key: str = 'movies', metric: str = 'average') -> Dict:
@@ -222,7 +225,7 @@ class Ratings:
         except Exception as e:
             logging.error(f'Failed return top {n}. Error message: {e}')
             raise ValueError(e)
-        
+
         return top_movies
     
     def top_controversial(self, key: str = 'movies', n: int = 10) -> Dict:
@@ -894,27 +897,43 @@ class Movies:
         Import data from movies.csv and transform it into list.
         Where each line of list is an list with cells values
         """
-        with open(path, encoding='UTF-8') as file:
-            next(file)
-            for line in file:
-                parts = line.strip().split(',')
-                movie_id = parts[0]
-                title = ','.join(parts[1:-1])
-                genres = parts[-1]
-                self.movies_csv.append([movie_id, title, genres])
-        
+        logging.debug('Movies._import_data_movies starting.')
+        try:
+            with open(path, encoding='UTF-8') as file:
+                next(file)
+                for line in file:
+                    parts = line.strip().split(',')
+                    movie_id = parts[0]
+                    title = ','.join(parts[1:-1])
+                    genres = parts[-1]
+                    self.movies_csv.append([movie_id, title, genres])
+        except Exception as e:
+            logging.error(f'Error in function Movies._import_data_movies: {e}.')
+            raise ValueError(e)
+
+            
     def dist_by_release(self) -> Dict:
         """
         The method returns a dict where the keys are years and the values are counts. 
         The years are extracted from the titles. Sorted by counts descendingly.
         """
+        logging.debug('Movies.dist_by_release starting.')
         def year_extractor(title):
-            year = title.split()[-1].strip('()')
+            try:
+                year = title.split()[-1].strip('()')
+            except Exception:
+                year = None
+                logging.warning(f'Can not parse year for incoming: {title}. Returning None.')
             return year
-            
-        movie_titles = [row[1] for row in self.movies_csv]
-        years = list(map(lambda x: year_extractor(x), movie_titles))
-        release_years = dict(sorted(Counter(years).items(), key=lambda x: (-x[1], x[0])))
+        try:
+            movie_titles = [row[1] for row in self.movies_csv]
+            years = list(map(lambda x: year_extractor(x), movie_titles))
+            release_years = dict(sorted(Counter(years).items(), key=lambda x: (-x[1], x[0])))
+        except Exception as e:
+            logging.error(f'Failed to create distribution. Error message: {e}')
+            raise ValueError(e)  
+        logging.info('The result dict was created successfully')
+                
         return release_years
     
     def dist_by_genres(self) -> Dict:
@@ -922,17 +941,22 @@ class Movies:
         The method returns a dict where the keys are genres and the values are counts.
         Sorted by counts descendingly.
         """
-        movie_genres = list(map(lambda x: x.split('|'), [row[2] for row in self.movies_csv]))
-        genres = {}
-        
-        for movie in movie_genres:
-            for genre in movie:
-                if genre not in genres.keys():
-                   genres[genre] = 1
-                else:
-                   genres[genre] += 1
-        genres = dict(sorted(genres.items(), key=lambda x: (-x[1], x[0])))  
-                
+        logging.info(f'Movies.dist_by_genres starting.')
+        try:
+            movie_genres = list(map(lambda x: x.split('|'), [row[2] for row in self.movies_csv]))
+            genres = {}
+            
+            for movie in movie_genres:
+                for genre in movie:
+                    if genre not in genres.keys():
+                        genres[genre] = 1
+                    else:
+                        genres[genre] += 1
+            genres = dict(sorted(genres.items(), key=lambda x: (-x[1], x[0])))
+        except Exception as e:
+            logging.error(f'Failed to create distribution. Error message: {e}')
+            raise ValueError(e)   
+        logging.info('The result dict was created successfully')         
         return genres
         
     def most_genres(self, n: int = 10) -> Dict:
@@ -940,12 +964,17 @@ class Movies:
         The method returns a dict with top-n movies where the keys are movie titles and 
         the values are the number of genres of the movie. Sorted by numbers descendingly.
         """
-        movie_titles = [' '.join(row[1].split()[:-1]) for row in self.movies_csv]
-        movie_genres_count = [len(row[2].split('|')) for row in self.movies_csv]
-        
-        movies_dict = {movie_title: genres_count for movie_title, genres_count in zip(movie_titles, movie_genres_count)} 
-        movies = dict(sorted(movies_dict.items(), key=lambda x: (-x[1], x[0]))[:n])
-        
+        logging.info(f'Movies.most_genres starting.')
+        try:
+            movie_titles = [' '.join(row[1].split()[:-1]) for row in self.movies_csv]
+            movie_genres_count = [len(row[2].split('|')) for row in self.movies_csv]
+            
+            movies_dict = {movie_title: genres_count for movie_title, genres_count in zip(movie_titles, movie_genres_count)} 
+            movies = dict(sorted(movies_dict.items(), key=lambda x: (-x[1], x[0]))[:n])
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
+        logging.info('The result dict was created successfully')         
         return movies
 
 
