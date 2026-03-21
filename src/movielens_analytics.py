@@ -1004,6 +1004,7 @@ class Tags:
         self._load_tags(path_to_the_file)  
     
     def _load_tags(self, path_to_the_file):
+        logging.debug('Tags._load_tags starting.')
         try:
             with open(path_to_the_file) as file:
                 next(file)  
@@ -1028,17 +1029,17 @@ class Tags:
                             'timestamp': timestamp
                         })
                         
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Error: File {path_to_the_file} not found")
         except Exception as e:
-            raise Exception(f"Error reading file: {e}")
+            logging.error(f'Error in function Tags._load_tags: {e}.')
+            raise ValueError(e)
 
     def most_words(self, n: int = 10) -> Dict:
         """
         The method returns top-n tags with most words inside. It is a dict 
         where the keys are tags and the values are the number of words inside the tag.
         The duplicates are dropped. Sorted by numbers descendingly.
-        """   
+        """  
+        logging.info('Starting Tags.most_words') 
         try:
             word_count = {}
             
@@ -1052,18 +1053,20 @@ class Tags:
                     word_count[tag] = num_words
 
             sorted_tags = sorted(word_count.items(), key=lambda x: (-x[1], x[0]))
-            
             result = dict(sorted_tags[:n])
-            return result
-            
-        except Exception as e:
-            raise Exception(f"Error in most_words: {e}")
+            logging.info('The result dict was created successfully')
 
-    def longest(self, n: int = 10) -> Dict:
+        except Exception as e:
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
+        return result
+
+    def longest(self, n: int = 10) -> List:
         """
         The method returns top-n longest tags in terms of the number of characters.
         It is a list of the tags. Drop the duplicates. Sort it by numbers descendingly.
-        """            
+        """   
+        logging.info('Starting Tags.longest')
         try:
             length_dict = {}
             
@@ -1077,17 +1080,21 @@ class Tags:
             sorted_tags = sorted(length_dict.items(), key=lambda x: (-x[1], x[0]))
             
             result = [tag for tag, _ in sorted_tags[:n]]
-            return result
+            logging.info('The result list was created successfully')
             
         except Exception as e:
-            raise Exception(f"Error in longest: {e}")
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
+        
+        return result
 
     def most_words_and_longest(self, n: int = 10) -> List:
         """
         The method returns the intersection between top-n tags with most words inside and 
         top-n longest tags in terms of the number of characters.
         The duplicates are dropped. It is a list of the tags.
-        """    
+        """ 
+        logging.info('Starting Tags.most_words_and_longest')   
         try:
             word_count = {}
             for tag_item in self.tags:
@@ -1110,17 +1117,21 @@ class Tags:
             
 
             result = sorted(list(top_words & top_longest))
-            return result
+            logging.info('The result list was created successfully')
             
         except Exception as e:
-            raise Exception(f"Error in most_words_and_longest: {e}")
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
+        
+        return result
 
     def most_popular(self, n: int = 10) -> Dict:
         """
         The method returns the most popular tags. 
         It is a dict where the keys are tags and the values are the counts.
         The duplicates are dropped. Sorted by counts descendingly.
-        """            
+        """
+        logging.info('Starting Tags.most_popular')       
         try:
             popularity = {}
             
@@ -1131,16 +1142,20 @@ class Tags:
             sorted_tags = sorted(popularity.items(), key=lambda x: (-x[1], x[0]))
             
             result = dict(sorted_tags[:n])
-            return result
+            logging.info('The result dict was created successfully')
             
         except Exception as e:
-            raise Exception(f"Error in most_popular: {e}")
+            logging.error(f'Failed return top {n}. Error message: {e}')
+            raise ValueError(e)
+        
+        return result
 
     def tags_with(self, word: str) -> List:
         """
         The method returns all unique tags that include the word given as the argument.
         The duplicates are dropped. It is a list of the tags. Sorted by tag names alphabetically.
-        """            
+        """  
+        logging.info('Starting Tags.tags_with')          
         try:
             matching_tags = set()
             word_lower = word.lower()
@@ -1151,7 +1166,10 @@ class Tags:
                     matching_tags.add(tag)
             
             result = sorted(list(matching_tags))
-            return result
+            logging.info('The result list was created successfully')
             
         except Exception as e:
-            raise Exception(f"Error in tags_with: {e}")
+            logging.error(f'Failed return unique tags with "{word}" inside. Error message: {e}')
+            raise ValueError(e)
+        
+        return result
