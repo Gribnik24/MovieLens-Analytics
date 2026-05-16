@@ -1,11 +1,10 @@
 from datetime import datetime
 from collections import Counter
 import requests
-from bs4 import BeautifulSoup
 from typing import List, Dict
 import logging
 
-logging.basicConfig(level=logging.INFO, filename="../logs.log",filemode="a")
+logging.basicConfig(level=logging.INFO, filename="../logs.log",filemode="w")
 
 class Ratings:
     """
@@ -325,336 +324,165 @@ class Links:
             logging.warning(f'Error in function Links._import_data_links: {e}.')
             raise ValueError(e)
     
+    @staticmethod
+    def _fetch_movie(imdb_id) -> Dict:
+        """
+        Method for finding information about movie through IMDb API
+        """
+        url = "https://api.graphql.imdb.com/"
+
+        query = """
+        query GetMovieData($id: ID!) {
+            title(id: $id) {
+                
+                # MAIN FIELDS
+                titleText { text }
+                titleGenres { genres { genre { text } } }
+                releaseDate { day month year }
+                runtime { seconds }
+                ratingsSummary {aggregateRating voteCount}
+                
+                # CREDITS
+                DIRECTORS: credits(first: 5, filter: { categories: ["director"] }) {
+                    edges { node { name { nameText { text } } } } }
+                WRITERS: credits(first: 5, filter: { categories: ["writer"] }) {
+                    edges { node { name { nameText { text } } } } }
+                CAST: credits(first: 5, filter: { categories: ["actor", "actress"] }) {
+                    edges { node { name { nameText { text } } } } }
+                
+                # GROSS AND BUDGET
+                productionBudget { budget { amount } }
+                lifetimeGross(boxOfficeArea: WORLDWIDE) { total { amount } }
+            }
+        }
+        """
+        
+        payload = {"query": query, "variables": {"id": imdb_id}}
+
+        try:
+            r = requests.post(url, json=payload, timeout=10)
+            r.raise_for_status()
+        except requests.RequestException:
+            logging.error('Can not get the response from https://api.graphql.imdb.com/.')
+            return None
+
+        data = r.json().get("data", {}).get("title", {})
+        if not data:
+            logging.error('The response is empty.')
+            return None
+
+        # MAIN FIELDS
+        try:
+            title = data.get("titleText", {}).get("text", None)
+            logging.info(f'The name of the movie is {title}')
+        except Exception as e:
+            logging.warning(f"Can not find the title for movie_id {imdb_id}: {e}")
+            title = None
+        try:
+            genres = []
+            for section in data.get("titleGenres", []).get("genres", []):
+                genres.append(section.get("genre", {}).get("text"))
+        except Exception as e:
+            logging.warning(f"Can not find the genres for movie_id {imdb_id}: {e}")
+            genres = []
+        try:
+            release_year = data.get("releaseDate", {}).get("year")
+        except Exception as e:
+            logging.warning(f"Can not find the release_year for movie_id {imdb_id}: {e}")
+            release_year = None
+        try:
+            runtime = data.get("runtime", {}).get("seconds", 0) // 60
+        except Exception as e:
+            logging.warning(f"Can not find the runtime for movie_id {imdb_id}: {e}")
+            runtime = 0
+        try:
+            rating = data.get("ratingsSummary", {}).get("aggregateRating", None)
+        except Exception as e:
+            logging.warning(f"Can not find the rating for movie_id {imdb_id}: {e}")
+            rating = None
+        try:
+            rated_count = data.get("ratingsSummary", {}).get("voteCount", None)
+        except Exception as e:
+            logging.warning(f"Can not find the rated_count for movie_id {imdb_id}: {e}")
+            rated_count = None
+        
+        # CREDITS
+        try:
+            directors = []
+            for director in data.get("DIRECTORS", {}).get("edges", {}):
+                directors.append(director.get("node", {}).get("name", {}).get("nameText", {}).get("text", None))
+        except Exception as e:
+            logging.warning(f"Can not find the directors for movie_id {imdb_id}: {e}")
+            directors = []
+        try:
+            writers = []
+            for writer in data.get("WRITERS", {}).get("edges", {}):
+                writers.append(writer.get("node", {}).get("name", {}).get("nameText", {}).get("text", None))
+        except Exception as e:
+            logging.warning(f"Can not find the writers for movie_id {imdb_id}: {e}")
+            writers = []
+        try:
+            cast = []
+            for actor in data.get("CAST", {}).get("edges", {}):
+                cast.append(actor.get("node", {}).get("name", {}).get("nameText", {}).get("text", None))
+        except Exception as e:
+            logging.warning(f"Can not find the cast for movie_id {imdb_id}: {e}")
+            cast = []
+            
+        # GROSS AND BUDGET
+        try:
+            budget = data.get("productionBudget", {}).get("budget", {}).get("amount", None)
+        except Exception as e:
+            logging.warning(f"Can not find the budget for movie_id {imdb_id}: {e}")
+            budget = None
+        try:
+            gross = data.get("lifetimeGross", {}).get("total", {}).get("amount", None)
+        except Exception as e:
+            logging.warning(f"Can not find the gross for movie_id {imdb_id}: {e}")
+            gross = None
+                    
+        return {
+            "imdb_id": imdb_id,
+            "title": title,
+            "genres": genres,
+            "release_year": release_year,
+            "runtime": runtime,
+            "rating": rating,
+            "rated_count": rated_count,
+            "directors": directors,
+            "writers": writers,
+            "cast": cast,
+            "budget": budget,
+            "gross": gross,
+        }
+    
     def get_imdb(self, list_of_movies: List, list_of_fields: List):
         """
         The method returns a list of lists [movieId, field1, field2, field3, ...]
-        for the list of movies given as the argument (movieId).
-        For example, [movieId, Director, Budget, Cumulative Worldwide Gross, Runtime].
-        The values  are parsed from the IMDB webpages of the movies.
+        for the list of movies given as the argument (movieId)
+        and a list of fields containing movie info (list_of_fileds).
+        For example, [movieId, directors, budget].
+        The values are parsed from the IMDB webpages of the movies.
         Sorted by movieId descendingly.
-        """
-        def money_converter(money_value: str) -> int:
-            """
-            Function for parsed money values converting into numeric.
-            Deleting '$' sign, commas and additional messages. For example:
-            '$93,000,000 (extimated)' --> 93000000
-            """
-            # Handle None or empty values
-            if not money_value:
-                return 0
-            
-            # If it's a list with one element, extract that element
-            if isinstance(money_value, list):
-                if len(money_value) == 1:
-                    money_value = money_value[0]  # Extract the string from the list
-                else:
-                    # If it's a list with multiple elements, process each one
-                    return [money_converter(item) for item in money_value]
-            
-            # Now money_value should be a string
-            if not isinstance(money_value, str):
-                return 0
-            
-            try:
-                # deleting probal (estimated) part in budget value. Example: $93,000,000 (estimated)
-                if '(' in money_value:
-                    money_value = money_value.split('(')[0].strip()
-                
-                # Remove $ sign and commas, then convert to int
-                clean_value = money_value.replace('$', '').replace(',', '').strip()
-                return int(clean_value) if clean_value else 0
-            except (ValueError, AttributeError):
-                logging.warning('money_converter function failed and returned 0')
-                return 0
         
-        def duration_converter(duration_value: str) -> List[int | None]:
-            """
-            Function for parsed duration values. Converting into minutes count, numeric.
-            Deleting 'h' and 'm' signs. For example:
-            '2h 58m' --> 178
-            """
-            converted_duration = duration_value
-            try:
-                hours, minutes = converted_duration.split()
-                hours = int(hours.rstrip('h'))
-                minutes = int(minutes.rstrip('m'))
-                return minutes + hours * 60
-            except:
-                logging.error('duration_converter function failed and returned None')
-                return None
+        Appropriate movie info fileds:
+        "imdb_id", "title", "genres", "release_year", "runtime", "rating",
+        "rated_count", "directors", "writers", "cast", "budget", "gross"
+        """
 
         self.current_imdb_info = []
         self.current_headers_info = [field.strip().lower() for field in list_of_fields]
-        headers = {'User-Agent': 'Mozilla/5.0(Windows NT 10.0; Win64; x64)', 'Accept': 'text/html'}
-        logging.debug('Connection headers and needed movie fields was processed/')
         
         for movie_id in list_of_movies:
-            logging.info(f'Started the movie_id {movie_id} proccessing.')
-            link = f'http://www.imdb.com/title/tt{str(movie_id)}/'
-            try:
-                response = requests.get(link, headers=headers)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                logging.debug(f'HTML page for movie id {movie_id} was got successfully')
-            except Exception as e:
-                logging.error(f'Error with connecting to url for movieId: {movie_id}')
-                raise Exception(f'Error with connecting to url for movieId: {movie_id}') from e
-
-            # Upper (black) part of IMDB HTML
-            try:
-                black_part = soup.find('section', attrs={'data-testid': 'hero-parent'})
-                logging.debug(f'Upper (black) part of HTML page for movie id {movie_id} was got successfully')
-            except Exception as e:
-                logging.error(f'Error with parsing upper (black) part for movieId: {movie_id}')
-                raise Exception(f'Error with parsing upper (black) part for movieId: {movie_id}') from e
+            logging.info(f'Started the movie_id tt{movie_id} proccessing.')
+            movie_dict = self._fetch_movie('tt' + movie_id)
             
-            # Lower (white) part of IMDB HTML
-            try:
-                white_part = soup.find('section', class_='ipc-page-background ipc-page-background--base sc-e1aae3e0-0 kWggHH')
-                logging.debug(f'Lower (white) part of HTML page for movie id {movie_id} was got successfully')
-            except Exception as e:
-                logging.error(f'Error with parsing lower (white) part for movieId: {movie_id}')
-                raise Exception(f'Error with parsing lower (white) part for movieId: {movie_id}') from e
-
-            # Header part. Includes: title, year, age rating, duration
-            logging.info(f'Starting parsing original_title, year, age_rating, duration for movie id {movie_id}')
-            original_title, year, age_rating, duration = None, None, None, None
-            
-            try:
-                header_part = black_part.find('div', class_='sc-af040695-0 iOwuHP')
-                try:
-                    original_title = header_part.find('div', class_="sc-b41e510f-2 jUfqFl baseAlt").text.split(':')[1].strip()
-                    logging.debug(f'The original_title for movie_id {movie_id} was parsed successfully.')
-                except:
-                    logging.warning(f'Can not find the header part for the movie {movie_id}. Filed original_title will have None value.')
-                try:
-                    list_items = header_part.find("ul", class_="ipc-inline-list").find_all('li')
-                    year, age_rating, duration = list(map(lambda x: x.text.strip(), list_items))
-                    logging.debug(f'The year, age_rating, duration for movie_id {movie_id} were parsed successfully.')
-                except:
-                    logging.warning(f'Error. In header_part parsing. The fields "year", "age_rating", "duration" for movie_id {movie_id} will have the None values.')
-                logging.debug(f'The header_part for movie_id {movie_id} was parsed successfully.')
-            except Exception as e:
-                logging.warning(f'Can not find the header part for movie_id {movie_id}. Fields "original_title", "year", "age_rating" will have None value.')
-            
-            # Tags part
-            tags = None
-            logging.info(f'Starting parsing the tags part for movie_id {movie_id}')
-            try:
-                tags_part = black_part.find('div', class_='ipc-chip-list__scroller')
-                tags = [tag.text.strip() for tag in tags_part.find_all('span', class_='ipc-chip__text')]
-            except Exception as e:
-                logging.warning(f'Can not find the tags part for movie_id {movie_id}. Field tags will have None value.')
-
-            # Cast part. Includes: director(s), writers, main actors
-            logging.info(f'Starting parsing directors, writers, main_actors fields for movie_id {movie_id}')
-            directors, writers, main_actors = None, None, None
-            try:
-                cast_part = black_part.find('div', class_='sc-af040695-2 fLTdiX')
-                main_team = cast_part.find_all('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content baseAlt")
-                directors_info, writers_info, actors_info = main_team
-                
-                try:
-                    directors_list = directors_info.find_all('li', class_="ipc-inline-list__item")
-                    directors = [director.text.strip() for director in directors_list]
-                except:
-                    logging.warning(f'Can not parse the directors of movie id {movie_id}. This field will have the None value.')
-                
-                try:
-                    writers_list = writers_info.find_all('li', class_="ipc-inline-list__item")
-                    writers = [writer.text.strip() for writer in writers_list]
-                except:
-                    logging.warning(f'Can not parse the writers of movie id {movie_id}. This field will have the None value.')
-                try:
-                    actors_list = actors_info.find_all('li', class_="ipc-inline-list__item")
-                    main_actors = [actor.text.strip() for actor in actors_list] 
-                except:
-                    logging.warning(f'Can not parse the main actors of movie id {movie_id}. This field will have the None value.')
-            except Exception as e:
-                logging.warning(f'Can not find the main team fields in movie page. Fields directors, writers, main_actors will have the None values.')
-
-            # Details block. Contains: release dates, origin countries, origin languages, filming locations, production companies
-            logging.info(f'Starting parsing the details block for movie id {movie_id}: release_dates, origins, languages, filming_locations, prod_companies fields.')
-            release_dates, origins, languages, filming_locations, prod_companies = None, None, None, None, None
-            try:
-                details_part = white_part.find('section', class_=["ipc-page-section", "ipc-page-section--base celwidget"], attrs={"data-testid": "Details"})
-                try:
-                    release_date_info = details_part.find(class_="ipc-metadata-list__item ipc-metadata-list__item--align-end ipc-metadata-list-item--link", attrs={"data-testid": "title-details-releasedate"})
-                    release_dates_list = release_date_info.find('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content base")
-                    release_dates = [release_date.text.strip() for release_date in release_dates_list.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the release dates of movie id {movie_id}. This field will have the None value.')
-                    
-                try:
-                    origin_info = details_part.find(class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end", "ipc-metadata-list-item--link"], attrs={"data-testid": "title-details-origin"})
-                    origins_list = origin_info.find('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content base")
-                    origins = [origin.text.strip() for origin in origins_list.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the origin info of movie id {movie_id}. This field will have the None value.')
-                
-                try:
-                    language_info = details_part.find(class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end", "ipc-metadata-list-item--link"], attrs={"data-testid": "title-details-languages"})
-                    languages_list = language_info.find('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content base")
-                    languages = [language.text.strip() for language in languages_list.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the languages of movie id {movie_id}. This field will have the None value.')
-             
-                try:
-                    filming_locations_info = details_part.find(class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end", "ipc-metadata-list-item--link"], attrs={"data-testid": "title-details-filminglocations"})
-                    filming_locations_list = filming_locations_info.find('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content base")
-                    filming_locations = [filming_location.text.strip() for filming_location in filming_locations_list.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the filming locations of movie id {movie_id}. This field will have the None value.')
-
-                try:
-                    prod_companies_info = details_part.find(class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end", "ipc-metadata-list-item--link"], attrs={"data-testid": "title-details-companies"})
-                    prod_companies_list = prod_companies_info.find('ul', class_="ipc-inline-list ipc-inline-list--show-dividers ipc-inline-list--inline ipc-metadata-list-item__list-content base")
-                    prod_companies = [prod_company.text.strip() for prod_company in prod_companies_list.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the production companies of movie id {movie_id}. This field will have the None value.')
-
-            except Exception as e:
-                logging.warning(f'Can not find the details block for movie id {movie_id}. The fields release_dates, origins, languages, filming_locations, prod_companies will have None values.')
-                
-            # Box office block. Contains: budgets, gross_domestics, opening_weekend_domestics, cumulative_worldwide_grosses
-            logging.info(f'Starting parsing the box office block for movie id {movie_id}: budgets, gross_domestics, opening_weekend_domestics, cumulative_worldwide_grosses.')
-            budgets, gross_domestics, opening_weekend_domestics, cumulative_worldwide_grosses = None, None, None, None
-            try:
-                box_office_part = white_part.find('div', class_="sc-314065ad-0 hZXevt", attrs={"data-testid": "title-boxoffice-section"})
-                try:
-                    budget_info = box_office_part.find('li', class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end sc-1c0b0ec6-2", "cTBfsm"], attrs={"data-testid": "title-boxoffice-budget"})
-                    budgets = [budget.text.strip() for budget in budget_info.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the budget info of movie id {movie_id}. This field will have the None value.')
-                
-                try:
-                    gross_domestic_info = box_office_part.find('li', class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end sc-1c0b0ec6-2", "cTBfsm"], attrs={"data-testid": "title-boxoffice-grossdomestic"})
-                    gross_domestics = [gross_domestic.text.strip() for gross_domestic in gross_domestic_info.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the gross domestic info of movie id {movie_id}. This field will have the None value.')
-
-                try:
-                    opening_weekend_domestic_info = box_office_part.find('li', class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end sc-1c0b0ec6-2", "cTBfsm"], attrs={"data-testid": "title-boxoffice-openingweekenddomestic"})
-                    opening_weekend_domestics = [opening_weekend_domestic.text.strip() for opening_weekend_domestic in opening_weekend_domestic_info.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the opening weekend domestic info of movie id {movie_id}. This field will have the None value.')
-
-                try:
-                    cumulative_worldwide_gross_info = box_office_part.find('li', class_=["ipc-metadata-list__item", "ipc-metadata-list__item--align-end sc-1c0b0ec6-2", "cTBfsm"], attrs={"data-testid": "title-boxoffice-cumulativeworldwidegross"})
-                    cumulative_worldwide_grosses = [cumulative_worldwide_gross.text.strip() for cumulative_worldwide_gross in cumulative_worldwide_gross_info.find_all('li', class_="ipc-inline-list__item")]
-                except Exception as e:
-                    logging.warning(f'Can not parse the cumulative worldwide gross info of movie id {movie_id}. This field will have the None value.')
-                    
-            except Exception as e:
-                logging.warning(f'Can not find the box office block for movie id {movie_id}. The fields budgets, gross_domestics, opening_weekend_domestics, cumulative_worldwide_grosses will have None values.')
-
-            logging.info(f'Starting filling the needed return list list for movie id {movie_id}.')
-            current_movie_info = [movie_id]
+            current_movie_info = [movie_dict['imdb_id'].lstrip('tt')]
             for field in self.current_headers_info:
-                if field in ('original_title', 'title', 'eng_title'):
-                    if original_title:
-                        current_movie_info.append(original_title)
-                    else:
-                        current_movie_info.append(None)
-                elif field == 'year':
-                    if year:
-                        current_movie_info.append(year)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('age_rating', 'age rating'):
-                    if age_rating:
-                        current_movie_info.append(age_rating)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('duration', 'runtime'):
-                    if duration:
-                        current_movie_info.append(duration_converter(duration))
-                    else:
-                        current_movie_info.append(None)
-                elif field == 'tags':
-                    if tags and len(tags) == 1:
-                        current_movie_info.append(tags[0])
-                    elif tags:
-                        current_movie_info.append(tags)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('directors', 'director'):
-                    if directors and len(directors) == 1:
-                        current_movie_info.append(directors[0])
-                    elif directors:
-                        current_movie_info.append(directors)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('writers', 'writer'):
-                    if writers and len(writers) == 1:
-                        current_movie_info.append(writers[0])
-                    elif writers:
-                        current_movie_info.append(writers)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('main actors', 'main_actors'):
-                    if main_actors and len(main_actors) == 1:
-                        current_movie_info.append(main_actors[0])
-                    elif main_actors:
-                        current_movie_info.append(main_actors)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('release_date', 'release_dates', 'release date', 'release dates'):
-                    if release_dates and len(release_dates) == 1:
-                        current_movie_info.append(release_dates[0])
-                    elif release_dates:
-                        current_movie_info.append(release_dates)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('origins', 'origin countries'):
-                    if origins and len(origins) == 1:
-                        current_movie_info.append(origins[0])
-                    elif origins:
-                        current_movie_info.append(origins)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('languages', 'language'):
-                    if languages and len(languages) == 1:
-                        current_movie_info.append(languages[0])
-                    elif languages:
-                        current_movie_info.append(languages)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('filming_locations', 'filming locations'):
-                    if filming_locations and len(filming_locations) == 1:
-                        current_movie_info.append(filming_locations[0])
-                    elif filming_locations:
-                        current_movie_info.append(filming_locations)
-                    else:
-                        current_movie_info.append(None)
-                elif field == ('prod_companies', 'production_companies', 'production companies', 'companies'):
-                    if prod_companies and len(prod_companies) == 1:
-                        current_movie_info.append(prod_companies[0])
-                    elif prod_companies:
-                        current_movie_info.append(prod_companies)
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('budgets', 'budget'):
-                    if budgets:
-                        current_movie_info.append(money_converter(budgets))
-                    else:
-                        current_movie_info.append(None)
-                elif field == 'gross_domestics':
-                    if gross_domestics:
-                        current_movie_info.append(money_converter(gross_domestics))
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('opening_weekend_domestics', 'opening weekend domestics'):
-                    if opening_weekend_domestics:
-                        current_movie_info.append(money_converter(opening_weekend_domestics[0]))
-                    else:
-                        current_movie_info.append(None)
-                elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
-                    if cumulative_worldwide_grosses:
-                        current_movie_info.append(money_converter(cumulative_worldwide_grosses))
-                    else:
-                        current_movie_info.append(None)
+                if field in movie_dict.keys():
+                    current_movie_info.append(movie_dict[field])
                 else:
-                    current_movie_info.append(None)
+                    logging.warning(f'There is no filed "{field}" in movie_id {movie_id}')
             
             logging.info(f'Adding the current movie info the all movies info list.')
             self.current_imdb_info.append(current_movie_info)
@@ -674,7 +502,7 @@ class Links:
             
             director_field_index = None
             for index, field in enumerate(self.current_headers_info):
-                if field in ('directors', 'director'):
+                if field == 'directors':
                     director_field_index = index
             if director_field_index is None:
                 logging.error('There is no director field in movies data.')
@@ -708,9 +536,9 @@ class Links:
             
             title_field_index, budget_field_index = None, None
             for index, field in enumerate(self.current_headers_info):
-                if field in ('original_title', 'title', 'eng_title'):
+                if field == 'title':
                     title_field_index = index
-                elif field in ('budgets', 'budget'):
+                elif field == 'budget':
                     budget_field_index = index
             
             if title_field_index is None:
@@ -756,11 +584,11 @@ class Links:
             
             title_field_index, budget_field_index, cum_world_gross_index = None, None, None
             for index, field in enumerate(self.current_headers_info):
-                if field in ('original_title', 'title', 'eng_title'):
+                if field == 'title':
                     title_field_index = index
-                elif field in ('budgets', 'budget'):
+                elif field == 'budget':
                     budget_field_index = index
-                elif field in ('cumulative_worldwide_grosses', 'worldwide_grosses', 'cumulative worldwide grosses', 'worldwide grosses'):
+                elif field == 'gross':
                     cum_world_gross_index = index
             
             if title_field_index is None:
@@ -811,9 +639,9 @@ class Links:
             
             title_field_index, duration_index = None, None
             for index, field in enumerate(self.current_headers_info):
-                if field in ('original_title', 'title', 'eng_title'):
+                if field == 'title':
                     title_field_index = index
-                elif field in ('duration', 'runtime'):
+                elif field == 'runtime':
                     duration_index = index
                     
             if title_field_index is None:
@@ -855,11 +683,11 @@ class Links:
             
             title_field_index, budget_field_index, duration_index = None, None, None
             for index, field in enumerate(self.current_headers_info):
-                if field in ('original_title', 'title', 'eng_title'):
+                if field == 'title':
                     title_field_index = index
-                elif field in ('budgets', 'budget'):
+                elif field == 'budget':
                     budget_field_index = index
-                elif field in ('duration', 'runtime'):
+                elif field == 'runtime':
                     duration_index = index
             
             if title_field_index is None:

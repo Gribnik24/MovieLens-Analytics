@@ -123,10 +123,8 @@ class Tests:
         assert len(self.links.links_csv) != 0
 
         imdb_movie_id = list(map(lambda x: x[1], self.links.links_csv))
-        movie_headers = ['title', 'year', 'age rating', 'duration',
-                         'director', 'writers', 'main actors', 'release date'
-                         'origins', 'languages', 'filming locations', 'production companies',
-                         'budget', 'gross_domestics', 'opening weekend domestics', 'worldwide grosses']
+        movie_headers = ["title", "genres", "release_year", "runtime", "rating",
+                         "rated_count", "directors", "writers", "cast", "budget", "gross"]
         self.links.get_imdb(imdb_movie_id, movie_headers)
         assert type(self.links.current_imdb_info).__name__ == 'list'
         assert type(self.links.current_headers_info).__name__ == 'list'
